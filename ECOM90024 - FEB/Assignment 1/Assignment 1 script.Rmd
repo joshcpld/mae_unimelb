@@ -56,7 +56,7 @@ To determine which model provides the best fit, it is important to use the follo
 
 ```{r q1b}
 
-#First we need to create some numeric time variables for the linear, quadratic models and exponential.
+#First we need to create some numeric time variables for the linear, quadratic  and exponential models.
 
 nile <- nile %>% 
   mutate(
@@ -148,6 +148,8 @@ To determine their influence on trend estimates, we should dummy out the relevan
 
 After investigating the data more closely, it seems the sale is only having a strong impact on the residuals between 30-04-17 and 02-05-17. Therefore, we will re-estimate these models with these periods dummied out and then compare to the original models.
 
+The results of the exercise are evident from the model_selection_criteria and model_selection_criteria_dummy tables printed below. By dummying out this period, we significantly improve the fit of our model, as seen by the large rise in R-squared values an decline in AIC and BIC values across all models. [INSERT POINT ON INFO CRITERIA ONCE I GET A RESPONSE FROM LECTURER/MAYBE GIVE MORE SOPHISTICATED ANSWER]
+
 <br>
 
 ```{r q1c}
@@ -173,6 +175,48 @@ ggplot(model_residuals, aes(x = date)) +
     scale_x_date(date_breaks = "1 month", date_label = "%b") + 
   labs(x = "Date", y = "Residuals") + 
   ggtitle("Chart 3: Residuals of NILE.COM daily traffic models")
+
+
+# DEFINING DUMMY VARIABLES #
+
+sale_dummy <- nile %>% 
+  select(date) %>% 
+  mutate(sale_dummy = case_when(
+    
+    date %in% c(as.Date("2017-04-30"), as.Date("2017-05-01"), as.Date("2017-05-02")) ~ 1,
+    TRUE ~ 0 
+    
+  )) 
+
+nile <- nile %>% 
+  inner_join(sale_dummy, by ="date")
+
+#RE-ESTIMATING MODELS#
+
+#Linear model
+
+hits_model_linear_dummy <- lm(hits ~ time + sale_dummy, data = nile)
+
+#Quadratic model
+
+hits_model_quadratic_dummy <- lm(hits ~ time + time_square + sale_dummy, data = nile)
+
+# Exponential model (need to define exponential trend first)
+
+hits_model_exponential_dummy <- lm(hits_log ~ time + sale_dummy, data = nile)
+
+
+# COMPARE MODEL FITS #
+
+model_list_dummy <- list(hits_model_linear_dummy, hits_model_quadratic_dummy, hits_model_exponential_dummy)
+
+model_names_dummy <- c("hits_model_linear_dummy", "hits_model_quadratic_dummy", "hits_model_exponential_dummy")
+
+model_selection_criteria_dummy <- map2_df(model_list_dummy, model_names_dummy, extract_criteria)
+
+print(model_selection_criteria)
+
+print(model_selection_criteria_dummy)
 
 ```
 
