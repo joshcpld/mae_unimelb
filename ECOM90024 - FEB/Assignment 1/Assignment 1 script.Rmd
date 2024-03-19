@@ -1,0 +1,239 @@
+---
+title: "Josh Copeland - ECOM90024 - Assignment 1"
+output: html_document
+date: ""
+---
+
+```{r libraries, include=FALSE}
+library(tidyverse)
+library(readxl)
+
+theme_set(theme_minimal())
+
+```
+
+
+# Question 1
+
+<br>
+
+You are an analyst working for NILE.COM, a successful online bookseller. You have been tasked with monitoring and forecasting the number of hits (i.e., visits) per day to its website. The file nile.csv on the LMS contains daily hits data for the period 1/1/2017 through to 28/9/2017. You are required to compute all your estimations and plots in R.
+
+<br>
+
+### a.) Generate an appropriate plot of data and provide a brief description of the observed time series. Make sure to point out any notable visual features/characteristics of the data. (1 Mark)
+
+<br>
+
+The graph below shows daily hits (visits) to the website NILE.COM from 1 January 2017 to 28 September 2017 in thousands. Over this time period, hits are trending upwards over time. There are no clear cycles in this data, but its possible there may be some weekly seasonal patterns. However, more analysis is required to confirm this seasonality. There was also a very large spike in website traffic in late April and early May, potentially due to a sale on the website.
+
+<br>
+
+```{r q1a}
+
+nile <- read_csv("nile.csv", show_col_types = FALSE) %>% 
+  mutate(date = seq(as.Date("2017-01-01"),as.Date("2017-09-28"), by = "day")) %>% 
+  select(date, hits = Hits) %>% 
+  mutate(hits = hits / 1000)
+
+ggplot(nile, aes(date, hits)) + geom_line() + scale_x_date(date_breaks = "1 month", date_label = "%b") + labs(x = "Date", y = "Hits (thousands)") + ggtitle("Chart 1: Daily hits to NILE.COM (01-01-2017 to 28-09-2017)")
+
+
+```
+
+
+<br>
+
+### b.) Fit and assess the linear, quadratic and exponential trend models to the data. In your analysis, make sure to include the estimation results as well as appropriate plots of the fitted trends that you have generated. Given your results, which trend model would you choose as your forecasting model? Make sure to provide your reasoning. (1 Mark)
+
+<br>
+
+The analysis below estimates and fits linear, quadratic and exponential trend models to the hits data for NILE.COM. Chart 2 shows how well the fitted trends accord with the underlying data. Without further analysis, it seems that they all provide roughly the same fit.
+
+To determine which model provides the best fit, it is important to use the following outputs generate by each: adjusted-R-squared values, AIC and BIC.These outputs are summarised in the model_selection_criteria table printed below. Using the information presented in this table, I would use the exponential trend model for forecasting as it has the highest adjusted-R-squared value, and the lowest AIC and BIC values relative to the other model.
+
+<br>
+
+```{r q1b}
+
+#First we need to create some numeric time variables for the linear, quadratic models and exponential.
+
+nile <- nile %>% 
+  mutate(
+    time = seq(1,length(nile$hits)),
+    time_square = time^2,
+    hits_log= log(hits))
+
+
+
+#ESTIMATING MODELS#
+
+#Linear model
+
+hits_model_linear <- lm(hits ~ time, data = nile)
+
+#Quadratic model
+
+hits_model_quadratic <- lm(hits ~ time + time_square, data = nile)
+
+# Exponential model (need to define exponential trend first)
+
+hits_model_exponential <- lm(hits_log ~ time, data = nile)
+
+
+
+
+#EXTRACTING MODEL FITS#
+
+nile <- nile %>% 
+  mutate(
+    
+    linear_model = predict(hits_model_linear),
+    
+    quadratic_model = predict(hits_model_quadratic),
+    
+    exponential_model = exp(coef(hits_model_exponential)[1])* exp(coef(hits_model_exponential)[2]*time)
+    
+  )
+
+# PLOTTING MODEL FITS #
+
+ggplot(nile, aes(x = date)) + 
+  geom_line(aes(y = hits, colour = "Data")) +
+  geom_line(aes(y = linear_model, colour = "Linear")) + 
+  geom_line(aes(y = quadratic_model, colour = "Quadratic")) + 
+  geom_line(aes(y = exponential_model, colour = "Exponential")) + 
+  scale_color_manual(values = c("Data"= "black" ,"Linear" = "blue", "Quadratic" = "red", "Exponential" = "green")) +
+  labs(colour = "Model") +
+  scale_x_date(date_breaks = "1 month", date_label = "%b") + 
+  labs(x = "Date", y = "Hits (thousands)") + 
+  ggtitle("Chart 2: Daily hits to NILE.COM with model fits (01-01-2017 to 28-09-2017)")
+
+
+# DISPLAYING MODEL OUTPUTS #
+
+summary(hits_model_linear)
+summary(hits_model_quadratic)
+summary(hits_model_exponential)
+
+# COMPARING INFORMATION CRITERIA #
+
+model_list <- list(hits_model_linear, hits_model_quadratic, hits_model_exponential)
+
+model_names <- c("hits_model_linear", "hits_model_quadratic", "hits_model_exponential")
+
+extract_criteria <- function(model, model_name) {
+  summary_data <- summary(model)
+  adj_r_squared <- summary_data$adj.r.squared
+  aic <- AIC(model)
+  bic <- BIC(model)
+  return(data.frame(Model = model_name, Adjusted_R_Squared = adj_r_squared, AIC = aic, BIC = bic))
+}
+
+model_selection_criteria <- map2_df(model_list, model_names, extract_criteria)
+
+print(model_selection_criteria)
+
+```
+
+<br>
+
+### c.) For a few days in late April and early May, website hits were much higher than usual during a big sale. Do you find evidence of a corresponding group of outliers in the residuals from your trend models? Do they influence your trend estimates much? How should you treat them? (1 Mark)
+
+<br>
+
+Chart 3 shows the residuals from each of the three trend models estimated in part (b). Thereis evidence of a corresponding group of outliers in the residuals, but only for the linear and quadratic models. There is a slight tick up in residuals values for this period in the exponential trend model, but nowhere near the magnitude of the others.
+
+To determine their influence on trend estimates, we should dummy out the relevant period of high website traffic and then compare outputs between these new model with dummy variables and the original models.
+
+After investigating the data more closely, it seems the sale is only having a strong impact on the residuals between 30-04-17 and 02-05-17. Therefore, we will re-estimate these models with these periods dummied out and then compare to the original models.
+
+<br>
+
+```{r q1c}
+
+model_residuals <- data.frame(date = nile$date) %>% 
+  mutate(
+    
+    linear_model_resids = resid(hits_model_linear),
+    
+    quadratic_model_resids = resid(hits_model_quadratic),
+    
+    exponential_model_resids = resid(hits_model_exponential)
+         
+    )
+
+
+ggplot(model_residuals, aes(x = date)) + 
+  geom_line(aes(y = linear_model_resids, colour = "Linear")) + 
+  geom_line(aes(y = quadratic_model_resids, colour = "Quadratic")) + 
+  geom_line(aes(y = exponential_model_resids, colour = "Exponential")) + 
+    scale_color_manual(values = c("Linear" = "blue", "Quadratic" = "red", "Exponential" = "green")) +
+  labs(colour = "Model") +
+    scale_x_date(date_breaks = "1 month", date_label = "%b") + 
+  labs(x = "Date", y = "Residuals") + 
+  ggtitle("Chart 3: Residuals of NILE.COM daily traffic models")
+
+```
+
+<br>
+
+### d.) Using your preferred model, determine whether there are statistically significant day-of-week effects in the hits to the NILE.COM website. Make sure to provide your reasoning and outline any statistical tests you have utilised in making this determination. (1 Mark)
+
+```{r q1d}
+
+
+```
+
+
+### e.) Your manager would like a forecast of the number of visits on the website for the remaining year. Using your results from parts a.) to d.), select a final model to use for forecasting. Use your model to produce appropriate interval forecasts through the end of 2017. Make sure to provide an interpretation of your forecast. (1 Mark)
+
+```{r q1e}
+
+
+```
+
+<br>
+<br>
+<br>
+<br>
+
+# Question 2
+
+<br>
+
+The file applerev.csv contains Apple Inc.’s quarterly revenues (measured in billions of USD). The sample period starts at the third quarter of 2010 and ends at the fourth quarter of 2022. You are required to compute all your estimations and plots in R.
+
+<br>
+
+### a.) Generate an appropriate plot of data and provide a brief description of the observed time series. Make sure to point out any notable visual features/characteristics of the data. (1 Mark)
+
+<br>
+
+```{r q2a}
+
+
+```
+
+<br>
+
+### b.) Using the steps outlined in the lecture slides, compute an appropriate decomposition of the data into its trend-cycle, seasonal and residual/remainder components. Generate appropriate plots of these components and make sure to justify any choices that you have made. (3 Marks)
+
+<br>
+
+```{r q2b}
+
+
+```
+
+<br>
+
+### c.) Compute the same decomposition using the decompose() and compare it with the decomposition that you have computed in part (b). (1 Mark)
+
+<br>
+
+```{r q2c}
+
+
+```
+

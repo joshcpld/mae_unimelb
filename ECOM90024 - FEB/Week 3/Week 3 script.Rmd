@@ -1,0 +1,148 @@
+---
+title: "ECOM90024 - FEB - Week 3 tutorial"
+output: html_document
+date: "2024-03-04"
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(readxl)
+```
+
+# 1.Using the housing starts data contained in the file ushstarts.csv, estimate a seasonal dummy model in which there are four seasons corresponding to the meteorological seasons in the northern hemisphere.
+
+
+### A) compute and plot the seasonal factors
+
+```{r q1a}
+
+housing_starts <- read_csv("ushstarts.csv") %>% mutate(date = seq(as.Date("1946-01-01"), as.Date("1994-11-11"), by = "month"))
+
+s <- 12
+
+nyears <- ceiling(length(housing_starts$date)/s)
+
+spring <- rep(c(0,0,1,1,1,0,0,0,0,0,0,0), nyears)
+summer <- rep(c(0,0,0,0,0,1,1,1,0,0,0,0), nyears)
+fall <- rep(c(0,0,0,0,0,0,0,0,1,1,1,0), nyears)
+winter <- rep(c(1,1,0,0,0,0,0,0,0,0,0,1), nyears)
+
+spring <- spring[1:length(housing_starts$date)]
+summer <- summer[1:length(housing_starts$date)]
+fall <- fall[1:length(housing_starts$date)]
+winter <- winter[1:length(housing_starts$date)]
+
+
+seasmod <- lm(formula = hstarts ~ 0 + spring + summer + fall + winter, data = housing_starts)
+
+summary(seasmod)
+
+
+seasonal.f <- coef(seasmod)
+
+plot(seasonal.f, type = "l")
+
+```
+
+
+### B) Generate and plot forecasts (point, confidence intervals and prediction intervals) for the forecast horizon h = 25
+
+```{r q1b}
+
+#Defining variables to produce forecast
+
+h = 24
+
+nyears.f = h/s + 1
+
+spring.h <- rep(c(0,0,1,1,1,0,0,0,0,0,0,0), nyears.f)
+summer.h <- rep(c(0,0,0,0,0,1,1,1,0,0,0,0), nyears.f)
+fall.h <- rep(c(0,0,0,0,0,0,0,0,1,1,1,0), nyears.f)
+winter.h <- rep(c(1,1,0,0,0,0,0,0,0,0,0,1), nyears.f)
+
+
+spring.h <- spring.h[12:36]
+summer.h <- summer.h[12:36]
+fall.h <- fall.h[12:36]
+winter.h <- winter.h[12:36]
+
+xh <- data.frame(spring.h, summer.h, fall.h, winter.h)
+
+colnames(xh) <- c("spring", "summer", "fall", "winter")
+
+
+# Producing forecasts
+
+point.forecast <- predict(seasmod, newdata = xh)
+point.forecast <- c(rep(NA,length(housing_starts$date)))
+
+ci.forecast <- data.frame(predict(seasmod, newdata = xh, interval = "confidence"))
+
+
+pi.forecast <- data.frame(predict(seasmod, newdata = xh, interval = "prediction"))
+
+
+ci.forecast.lwr <- c(rep(NA,length(housing_starts$date)),ci.forecast$lwr)
+ci.forecast.upr <- c(rep(NA,length(housing_starts$date)),ci.forecast$upr)
+pi.forecast.lwr <- c(rep(NA,length(housing_starts$date)),pi.forecast$lwr)
+pi.forecast.upr <- c(rep(NA,length(housing_starts$date)),pi.forecast$upr)
+
+
+# Plot the forecast
+
+
+
+
+```
+
+
+
+
+# 2.	You are a research analyst for the Reserve Bank of Australia, monitoring the household consumption expenditures of Australian households. You are tasked with analysing a sample of quarterly Household Final Consumption Expenditure data from the September quarter of 1959 to the December quarter of 2018. 
+
+
+### a) Import the original series located in column FM of sheet Data1 (series ID: A2302484C) and generate an appropriate plot of the data. Describe the primary visual features of the time series.    
+
+
+```{r q2a}
+
+cons <- read_excel("5206002_expenditure_volume_measures.xls", 
+                   sheet = "Data1", 
+                   col_names = "cons", 
+                   range = "FM11: FM248")
+
+
+```
+
+### b.)	Using the decompose() function, generate and plot a seasonally adjusted version of the series (i.e., the original series with the seasonal component removed). Make sure to justify any choices that you have made performing the seasonal adjustment. 
+
+```{r q2b}
+
+
+
+```
+
+### c.)	Compare the seasonally adjusted series that you have computed with the seasonally adjusted data that is contained in column CI of sheet Data1 (series ID: A2304081W). 
+
+```{r q2c}
+
+
+
+```
+
+### d.)	Using the seasonally adjusted series that you have computed, estimate a quadratic trend model and use your model estimates to generate and plot the fitted trend. 
+
+```{r q2d}
+
+
+
+```
+
+
+### Using your estimated model, generate and plot forecasts (point, confidence intervals and prediction intervals) for the forecast horizon h=8. For your interval forecasts, let (1-α)=0.8.   
+
+```{r q2e}
+
+
+
+```
