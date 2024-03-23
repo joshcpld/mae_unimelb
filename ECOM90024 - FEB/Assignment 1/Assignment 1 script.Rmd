@@ -7,8 +7,21 @@ date: ""
 ```{r libraries, include=FALSE}
 library(tidyverse)
 library(readxl)
+library(lubridate)
+library(janitor)
 
 theme_set(theme_minimal())
+
+```
+
+```{r librariers_used}
+
+# Libraries used for this assignment:
+ 
+# library(tidyverse)
+# library(readxl)
+# library(lubridate)
+# library(janitor)
 
 ```
 
@@ -161,7 +174,7 @@ model_residuals <- data.frame(date = nile$date) %>%
     
     quadratic_model_resids = resid(hits_model_quadratic),
     
-    exponential_model_resids = resid(hits_model_exponential)
+    exponential_model_resids = nile$hits- nile$exponential_model
          
     )
 
@@ -187,6 +200,8 @@ sale_dummy <- nile %>%
     TRUE ~ 0 
     
   )) 
+
+# NOTE: FIX DUPLICATIVE SALE_DUMMY VARIABLE ###########################################################################################################
 
 nile <- nile %>% 
   inner_join(sale_dummy, by ="date")
@@ -226,6 +241,41 @@ print(model_selection_criteria_dummy)
 
 ```{r q1d}
 
+# CREATING WEEKDAY DUMMY VARIABLES #
+
+nile <- nile %>% 
+  mutate(weekday = wday(date, week_start = 2)) %>% 
+  mutate(
+    monday_dummy = case_when(weekday == 1 ~ 1, TRUE ~ 0),
+    tuesday_dummy = case_when(weekday == 2 ~ 1, TRUE ~ 0),
+    wednesday_dummy = case_when(weekday == 3 ~ 1, TRUE ~ 0),
+    thursday_dummy = case_when(weekday == 4 ~ 1, TRUE ~ 0),
+    friday_dummy = case_when(weekday == 5 ~ 1, TRUE ~ 0),
+    saturday_dummy = case_when(weekday == 6 ~ 1, TRUE ~ 0),
+    sunday_dummy = case_when(weekday == 7 ~ 1, TRUE ~ 0)
+  )
+
+# CREATING SEASONAL MODEL #
+
+hits_model_seasonal <- lm(exponential_model ~ 0 + monday_dummy + tuesday_dummy + wednesday_dummy + thursday_dummy + friday_dummy + saturday_dummy + sunday_dummy, data = nile)
+
+summary(hits_model_seasonal)
+
+hits_model_seasonal_coef <- data.frame(coef(hits_model_seasonal)) %>% 
+  rownames_to_column() %>% 
+  select(weekday = rowname, seasonal_factor = coef.hits_model_seasonal.) %>%
+  #Need the exponent of the coefficients to get out of log form for interpretation
+  # mutate(seasonal_factor = exp(log_seasonal_factor)) %>% 
+  mutate(weekday = str_replace(weekday, "_dummy","")) %>% 
+  mutate(weekday = factor(weekday)) %>% 
+  mutate(weekday = fct_relevel(weekday, 
+                               "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"))
+
+
+ggplot(hits_model_seasonal_coef, aes(weekday, seasonal_factor)) + geom_col()
+
+#No seasonal effect - this is a trend model!!
+
 
 ```
 
@@ -233,6 +283,38 @@ print(model_selection_criteria_dummy)
 ### e.) Your manager would like a forecast of the number of visits on the website for the remaining year. Using your results from parts a.) to d.), select a final model to use for forecasting. Use your model to produce appropriate interval forecasts through the end of 2017. Make sure to provide an interpretation of your forecast. (1 Mark)
 
 ```{r q1e}
+
+nile_f <- data.frame(date = seq(tail(nile$date,1) + days(1), as.Date("2017-12-31"), by = "day")) %>% 
+  mutate(
+    
+    time = seq(length.out = n(), from = tail(nile$time, 1) + 1, by = 1),
+    sale_dummy = 0
+    
+  )
+
+pi_forecast <- data.frame(predict(hits_model_exponential_dummy, newdata = nile_f, interval = "prediction")) %>% 
+  mutate_all(~ exp(.))
+
+nile_final <- pi_forecast %>% 
+  select(point_estimate = fit, upper = upr, lower = lwr) %>% 
+  bind_cols(nile_f) %>% 
+  select(date, point_estimate, upper, lower) %>% 
+  full_join(nile, by = "date") %>% 
+  select(date, hits, exponential_model, point_estimate, upper, lower) %>% 
+  arrange(date)
+  
+
+ggplot(nile_final, aes(x = date)) + geom_line(aes(y = hits)) + 
+  geom_line(aes(y = exponential_model)) +
+  geom_line(aes(y = point_estimate)) +
+  geom_line(aes(y = upper)) + 
+  geom_line(aes(y = lower))
+  
+#Explain why I use pi forecasts and note explilower#Explain why I use pi forecasts and note explicit language when interpreting them!
+
+#Need to format graphs
+
+
 
 
 ```
