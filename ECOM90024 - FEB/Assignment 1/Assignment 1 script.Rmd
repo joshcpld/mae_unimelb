@@ -93,7 +93,7 @@ hits_model_quadratic <- lm(hits ~ time + time_square, data = nile)
 
 hits_model_exponential <- lm(hits_log ~ time, data = nile)
 
-
+hits_model_exponential_descaled <- nls(hits ~ a*exp(b*time), start=list(a=8000, b = 0.04), data = nile)
 
 
 #EXTRACTING MODEL FITS#
@@ -105,7 +105,7 @@ nile <- nile %>%
     
     quadratic_model = predict(hits_model_quadratic),
     
-    exponential_model = exp(coef(hits_model_exponential)[1])* exp(coef(hits_model_exponential)[2]*time)
+    exponential_model = predict(hits_model_exponential_descaled)
     
   )
 
@@ -127,20 +127,19 @@ ggplot(nile, aes(x = date)) +
 
 summary(hits_model_linear)
 summary(hits_model_quadratic)
-summary(hits_model_exponential)
+summary(hits_model_exponential_descaled)
 
 # COMPARING INFORMATION CRITERIA #
 
-model_list <- list(hits_model_linear, hits_model_quadratic, hits_model_exponential)
+model_list <- list(hits_model_linear, hits_model_quadratic, hits_model_exponential_descaled)
 
-model_names <- c("hits_model_linear", "hits_model_quadratic", "hits_model_exponential")
+model_names <- c("hits_model_linear", "hits_model_quadratic", "hits_model_exponential_descaled")
 
 extract_criteria <- function(model, model_name) {
   summary_data <- summary(model)
-  adj_r_squared <- summary_data$adj.r.squared
   aic <- AIC(model)
   bic <- BIC(model)
-  return(data.frame(Model = model_name, Adjusted_R_Squared = adj_r_squared, AIC = aic, BIC = bic))
+  return(data.frame(Model = model_name, AIC = aic, BIC = bic))
 }
 
 model_selection_criteria <- map2_df(model_list, model_names, extract_criteria)
@@ -174,7 +173,7 @@ model_residuals <- data.frame(date = nile$date) %>%
     
     quadratic_model_resids = resid(hits_model_quadratic),
     
-    exponential_model_resids = nile$hits- nile$exponential_model
+    exponential_model_resids = resid(hits_model_exponential_descaled)
          
     )
 
@@ -216,22 +215,36 @@ hits_model_linear_dummy <- lm(hits ~ time + sale_dummy, data = nile)
 
 hits_model_quadratic_dummy <- lm(hits ~ time + time_square + sale_dummy, data = nile)
 
-# Exponential model (need to define exponential trend first)
+# Exponential model
 
-hits_model_exponential_dummy <- lm(hits_log ~ time + sale_dummy, data = nile)
+hits_model_exponential_descaled_dummy <- nls(hits ~ a*exp(b*time) + sale_dummy, start=list(a=8000, b = 0.04), data = nile)
 
 
 # COMPARE MODEL FITS #
 
-model_list_dummy <- list(hits_model_linear_dummy, hits_model_quadratic_dummy, hits_model_exponential_dummy)
+model_list_dummy <- list(hits_model_linear_dummy, hits_model_quadratic_dummy, hits_model_exponential_descaled_dummy)
 
-model_names_dummy <- c("hits_model_linear_dummy", "hits_model_quadratic_dummy", "hits_model_exponential_dummy")
+model_names_dummy <- c("hits_model_linear_dummy", "hits_model_quadratic_dummy", "hits_model_exponential_descaled_dummy")
 
 model_selection_criteria_dummy <- map2_df(model_list_dummy, model_names_dummy, extract_criteria)
 
 print(model_selection_criteria)
 
 print(model_selection_criteria_dummy)
+
+# These dummy variables improve the model fit, therefore incorporate their predictions into the main data frame.
+
+nile <- nile %>% 
+  mutate(
+    
+    linear_model_dummy = predict(hits_model_linear_dummy),
+    
+    quadratic_model_dummy = predict(hits_model_quadratic_dummy),
+    
+    exponential_model_dummy = predict(hits_model_exponential_descaled_dummy)
+    
+  )
+
 
 ```
 
@@ -255,27 +268,33 @@ nile <- nile %>%
     sunday_dummy = case_when(weekday == 7 ~ 1, TRUE ~ 0)
   )
 
-# CREATING SEASONAL MODEL #
+# CREATING SEASONAL MODEL FOR PREFERRED MODEL (LINEAR) #
 
-hits_model_seasonal <- lm(exponential_model ~ 0 + monday_dummy + tuesday_dummy + wednesday_dummy + thursday_dummy + friday_dummy + saturday_dummy + sunday_dummy, data = nile)
+hits_model_linear_dummy_seasonal <- lm(linear_model_dummy ~ 0 + monday_dummy + tuesday_dummy + wednesday_dummy + thursday_dummy + friday_dummy + saturday_dummy + sunday_dummy, data = nile)
 
-summary(hits_model_seasonal)
+summary(hits_model_linear_dummy_seasonal)
 
-hits_model_seasonal_coef <- data.frame(coef(hits_model_seasonal)) %>% 
+hits_model_linear_dummy_seasonal_coef <- data.frame(coef(hits_model_linear_dummy_seasonal)) %>% 
   rownames_to_column() %>% 
-  select(weekday = rowname, seasonal_factor = coef.hits_model_seasonal.) %>%
-  #Need the exponent of the coefficients to get out of log form for interpretation
-  # mutate(seasonal_factor = exp(log_seasonal_factor)) %>% 
+  select(weekday = rowname, seasonal_factor = coef.hits_model_linear_dummy_seasonal.) %>%
   mutate(weekday = str_replace(weekday, "_dummy","")) %>% 
   mutate(weekday = factor(weekday)) %>% 
   mutate(weekday = fct_relevel(weekday, 
                                "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"))
 
 
-ggplot(hits_model_seasonal_coef, aes(weekday, seasonal_factor)) + geom_col()
+ggplot(hits_model_linear_dummy_seasonal_coef, aes(weekday, seasonal_factor)) + geom_col()
 
-#No seasonal effect - this is a trend model!!
 
+# DETERMINING IF THE SEASONAL MODEL IMPROVES ON THE OTHER LINEAR MODELS #
+
+model_list_dummy <- list(hits_model_linear, hits_model_linear_dummy,hits_model_linear_dummy_seasonal)
+
+model_names_dummy <- c("hits_model_linear", "hits_model_linear_dummy","hits_model_linear_dummy_seasonal")
+
+model_selection_criteria_linear_models <- map2_df(model_list_dummy, model_names_dummy, extract_criteria)
+
+print(model_selection_criteria_linear_models)
 
 ```
 
@@ -292,30 +311,30 @@ nile_f <- data.frame(date = seq(tail(nile$date,1) + days(1), as.Date("2017-12-31
     
   )
 
-pi_forecast <- data.frame(predict(hits_model_exponential_dummy, newdata = nile_f, interval = "prediction")) %>% 
-  mutate_all(~ exp(.))
+pi_forecast <- data.frame(predict(hits_model_linear_dummy, newdata = nile_f, interval = "prediction")) %>% 
+  mutate(date = seq(tail(nile$date,1) + days(1), as.Date("2017-12-31"), by = "day"))
+
 
 nile_final <- pi_forecast %>% 
-  select(point_estimate = fit, upper = upr, lower = lwr) %>% 
-  bind_cols(nile_f) %>% 
-  select(date, point_estimate, upper, lower) %>% 
-  full_join(nile, by = "date") %>% 
-  select(date, hits, exponential_model, point_estimate, upper, lower) %>% 
+  select(date, point_estimate = fit)
+
+
+nile_final <- pi_forecast %>% 
+  select(date, point_estimate = fit, upper = upr, lower = lwr) %>%
+  left_join(nile_f, by = "date") %>% 
+  bind_rows(nile) %>% 
+  select(date, hits, linear_model_dummy, point_estimate, upper, lower) %>% 
   arrange(date)
-  
 
-ggplot(nile_final, aes(x = date)) + geom_line(aes(y = hits)) + 
-  geom_line(aes(y = exponential_model)) +
-  geom_line(aes(y = point_estimate)) +
-  geom_line(aes(y = upper)) + 
-  geom_line(aes(y = lower))
-  
-#Explain why I use pi forecasts and note explilower#Explain why I use pi forecasts and note explicit language when interpreting them!
-
-#Need to format graphs
-
-
-
+ 
+ggplot(nile_final, aes(x = date)) + geom_line(aes(y = hits, colour = "Data")) +
+  geom_line(aes(y = linear_model_dummy, colour = "Model fit")) +
+  geom_line(aes(y = point_estimate, colour = "Prediction interval forecast")) +
+  geom_line(aes(y = upper, colour = "95% prediction interval"), linetype = "dotted", size = 0.5) +
+  geom_line(aes(y = lower, colour = "95% prediction interval"),linetype = "dotted", size = 0.5) + 
+  scale_colour_manual(values = c("Data" = "black", "Model fit" = "red", "Prediction interval forecast" = "blue", "95% prediction interval" = "purple")) +
+  theme(legend.position = "bottom", legend.key.size = unit(3, "lines"))
+ 
 
 ```
 
@@ -338,6 +357,13 @@ The file applerev.csv contains Apple Inc.’s quarterly revenues (measured in bi
 
 ```{r q2a}
 
+applerev <- read_excel("applerev.xlsx") %>% 
+  mutate(date_clean = parse_date_time(date, orders = "mdy")) %>% 
+  select(date = date_clean, revenue)
+
+
+ggplot(applerev, aes(x = date, y = revenue)) + geom_line()
+
 
 ```
 
@@ -345,10 +371,73 @@ The file applerev.csv contains Apple Inc.’s quarterly revenues (measured in bi
 
 ### b.) Using the steps outlined in the lecture slides, compute an appropriate decomposition of the data into its trend-cycle, seasonal and residual/remainder components. Generate appropriate plots of these components and make sure to justify any choices that you have made. (3 Marks)
 
+We need to use multplicative decomp!
+
 <br>
 
 ```{r q2b}
 
+# SEASONAL #
+
+applerev <- applerev %>% 
+  mutate(quarter = quarter(date)) %>% #Note: quarters are based on calendar years
+  mutate(
+    
+    q1_dummy = (case_when(quarter == 1 ~ 1, TRUE ~ 0)),
+    q2_dummy = (case_when(quarter == 2 ~ 1, TRUE ~ 0)),
+    q3_dummy = (case_when(quarter == 3 ~ 1, TRUE ~ 0)),
+    q4_dummy = (case_when(quarter == 4 ~ 1, TRUE ~ 0))
+    
+  )
+
+model_applerev_seasonal <- lm(revenue ~ 0 + q1_dummy + q2_dummy + q3_dummy + q4_dummy, data = applerev)
+
+applerev <- applerev %>% 
+  mutate(seasonal = predict(model_applerev_seasonal))
+
+
+# TREND #
+
+print(length(applerev$date)) 
+
+#Note: the number of observations in our time series is 50 and the seasonal pattern is quarterly. Therefore, specify an MA(4) model which take the average of two weighting patterns.
+
+applerev <- applerev %>% 
+  mutate(
+    
+    trend = 1/2*(1/4*(lag(revenue,2) + lag(revenue,1) + revenue + lead(revenue,1)) + 1/4*(lag(revenue,1)  + revenue + lead(revenue,1) + lead(revenue,2)))
+    
+  )
+
+# DETRENDED #
+
+applerev <- applerev %>% 
+  mutate(
+    
+    detrended = revenue / trend
+    
+  )
+
+# REMAINDER #
+
+applerev <- applerev %>% 
+  mutate(
+    
+    remainder = revenue / (trend * seasonal)
+    
+  )
+
+
+# CHARTING UP MANUAL DECOMPOSITION #
+
+applerev_manual_decomp_data <- applerev %>% 
+  select(date, data = revenue, trend, seasonal, remainder) %>% 
+  pivot_longer(-date) %>% 
+  mutate(name = factor(name, levels = c("data", "trend", "seasonal", "remainder")))
+
+ggplot(applerev_manual_decomp_data, aes(x = date, y = value)) + 
+  geom_line() + 
+  facet_wrap(~ name, ncol = 1, scale = "free")
 
 ```
 
@@ -360,6 +449,30 @@ The file applerev.csv contains Apple Inc.’s quarterly revenues (measured in bi
 
 ```{r q2c}
 
+
+applerev_auto_decomp <- applerev %>% 
+  pull(revenue) %>% 
+  ts(start = c(2010,3), end = c(2022,4), frequency = 4) %>% 
+  decompose(type = "multiplicative")
+
+
+
+#Note: the autoplot function was giving me an error, so I've had to extract everything into another dataframe and use ggplot2 to graph.
+
+applerev_auto_decomp_data <- data.frame(applerev_auto_decomp$trend) %>% 
+  cbind(applerev_auto_decomp$seasonal) %>% 
+  cbind(applerev_auto_decomp$random) %>% 
+  cbind(applerev$date) %>% 
+  cbind(applerev$revenue) %>% 
+  clean_names() %>% 
+  select(date = applerev_date, data = applerev_revenue, trend = applerev_auto_decomp_trend,
+         seasonal = applerev_auto_decomp_seasonal, error = applerev_auto_decomp_random) %>% 
+    pivot_longer(-date) %>% 
+  mutate(name = factor(name, levels = c("data", "trend", "seasonal", "random")))
+ 
+ggplot(applerev_manual_decomp_data, aes(x = date, y = value)) + 
+  geom_line() + 
+  facet_wrap(~ name, ncol = 1, scale = "free")
 
 ```
 
