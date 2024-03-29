@@ -377,12 +377,12 @@ notable visual features/characteristics of the data. (1 Mark)</h3>
 <p><br></p>
 <p>The graph below (Chart 1) shows daily hits (visits) to the website
 NILE.COM from 1 January 2017 to 28 September 2017 in thousands. Over
-this time period, hits are trending upwards over time. There are no
-clear cycles in this data, but its possible there may be some high
-frequency seasonal patterns (i.e. weeks or months). However, more
-analysis is required to confirm this seasonality. There was also a very
-large spike in website traffic in late April and early May, potentially
-due to a sale on the website.</p>
+this time period, hits are trending upwards. There are no clear cycles
+in this data, but its possible there may be some high frequency seasonal
+patterns (i.e. weeks or months). However, more analysis is required to
+confirm this seasonality. There was also a very large spike in website
+traffic in late April and early May, potentially due to a sale on the
+website.</p>
 <p><br></p>
 <pre class="r"><code>nile &lt;- read_csv(&quot;nile.csv&quot;, show_col_types = FALSE) %&gt;% 
   mutate(date = seq(as.Date(&quot;2017-01-01&quot;),as.Date(&quot;2017-09-28&quot;), by = &quot;day&quot;)) %&gt;% 
@@ -415,7 +415,7 @@ of any r-squared values complex. the nls() function does not generate
 this automatically and I have not attempted to create my own measure to
 make comparisons as simple as possible.</p>
 <p>A comparison of the relevant model selection criteria, as summarised
-in the model_selection_criteria table below, shows us that linear model
+in the model_selection_criteria table below, shows us the linear model
 is the most appropriate for forecasting. This is because it has the
 lowest AIC and BIC values relative to the other two.</p>
 <p><br></p>
@@ -558,8 +558,7 @@ Do they influence your trend estimates much? How should you treat them?
 <p>Chart 3 shows the residuals from each of the three trend models
 estimated in part (b). It is obvious that in each model the residuals
 increase significantly for a few days in late April and early May - it
-is very likely this sale has impacted the estimation of our results in
-part (b).</p>
+is very likely this sale has impacted our results in part (b).</p>
 <p>To determine the magnitude of their influence on model estimates, we
 should dummy out the relevant period of high website traffic in a new
 set of models and then compare the outputs between them to gauge its
@@ -571,16 +570,16 @@ re-estimate these models with these periods dummied out and then compare
 to the original models.</p>
 <p>The result of this exercise are evident by comparing the
 model_selection_criteria and model_selection_criteria_dummy tables print
-below. By dummying out this period, we significantly improve the for of
-our model:</p>
-<p>The AIC and BIC:</p>
+below. By dummying out this period, we significantly improve the fits of
+our models:</p>
+<p>The AIC and BIC of the:</p>
 <ul>
-<li><p>Of the linear model reduces from 1567.074 and 1577.880 to
-1392.585 and 1406.993 respectively.</p></li>
-<li><p>Of the quadratic model reduces from 1567.169 and 1581.578 to
-1394.572 and 1412.583 respectively.</p></li>
-<li><p>Of the exponential model reduces from 1569.858 and 1580.664 to
-1560.798 and 1571.604 respectively.</p></li>
+<li><p>Linear model reduces from 1567.074 and 1577.880 to 1392.585 and
+1406.993 respectively.</p></li>
+<li><p>Quadratic model reduces from 1567.169 and 1581.578 to 1394.572
+and 1412.583 respectively.</p></li>
+<li><p>Exponential model reduces from 1569.858 and 1580.664 to 1560.798
+and 1571.604 respectively.</p></li>
 </ul>
 <p>It is worth pointing out that controlling for this large sale in our
 modelling had the largest impact on the linear model, followed closely
@@ -893,7 +892,7 @@ of the data. To do this I have made the following assumptions:</p>
 part of the decomposition using a set of quarterly dummies.</p></li>
 <li><p>I have computed a multiplicative decomposition of this data
 because the seasonal trend is multiplicative. This can be deduced by the
-fact that the difference between annual pekas and troughs increases with
+fact that the difference between annual peaks and troughs increases with
 revenue levels.</p></li>
 <li><p>To construct the trend-cycle part of the decomposition, I have
 used an MA(4) model. This is because the frequency of the data is
