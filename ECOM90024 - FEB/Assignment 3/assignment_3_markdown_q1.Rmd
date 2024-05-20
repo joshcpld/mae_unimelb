@@ -1,0 +1,56 @@
+---
+title: "ECOM90024 - Assignment 3 - Question 1"
+author: "Josh Copeland"
+date: "2024-05-22"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+library(lubridate)
+library(forecast)
+library(zoo)
+
+theme_set(theme_minimal())
+
+```
+```{r setup_text}
+
+# Packages used for this assignment
+ 
+# library(tidyverse)
+# library(lubridate)
+# library(forecast)
+
+```
+
+
+## a) Using the Case Shiller housing price data from Assignment 2, test for the presence of a unit root using an appropriate Augmented Dicky Fuoller and determine the order of integration.
+
+<br>
+
+[text]
+
+<br>
+
+```{r a}
+
+
+```
+
+<br>
+
+## b) Using the data from January 1987 to December 2018, identify an estimate an approprite time series model. Make sure to report all relevant estimation results, plots, statistical tests and information criteria that you are relying on in determining your preferred model. (2 Marks)
+
+```{r b}
+
+
+```
+
+## c) Using your estimation results from part b, compute and plot appropriate point and interval forecasts for the period spanning January 2019 to January 2022. Do the forecasts perform well when compared to the actual realisations? Why or why not?
+
+```{r c}
+
+
+```

@@ -1,0 +1,94 @@
+---
+title: "ECOM90024 - Assignment 3 - Question 3"
+author: "Josh Copeland"
+date: "2024-05-22"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+library(lubridate)
+library(forecast)
+
+theme_set(theme_minimal())
+
+```
+```{r setup_text}
+
+# Packages used for this assignment
+ 
+# library(tidyverse)
+# library(lubridate)
+# library(forecast)
+
+```
+
+# Question 3 
+
+<br>
+
+The file "aapl.csv" contins observations of the daily closing price of Apple from 15/05/2015 to 15/05/2019. Uing *R* you are required to do the following:
+
+<br>
+
+
+## a) Generate the daily returns of Apple's stock price as the log difference of the daily closing price. Plot the data and provide a brief description of the observed time series.
+
+<br>
+
+[text]
+
+<br>
+
+```{r a}
+
+
+```
+
+<br>
+
+## b) Using the methodology outlined in previous lectures, specify and estimate an appropriate and parsimonious model for the conditional mean of the daily returns. Do not include any deterministic trend or seasonal dummies in your specification.
+
+```{r b}
+
+
+```
+
+## c) Using your estimates from part b, comput hte plot h-step ahead dpoint and 95% interval forecasts for the daily returns for h = 1, 2, ..., 10.
+
+```{r c}
+
+
+```
+
+
+## d) Using the method described in lecture 9, test for the preence of ARCH effects in the residuals obtained from the conditional mean estimated in part (b).
+
+```{r d}
+
+
+```
+
+
+## e) Estimate an appropriate ARCH/GARCH model for the innovations. Verify that your specification si adequate.
+
+```{r e}
+
+
+```
+
+
+## f) Using conditional varince forecasts from your ARCH/GARCH model, compute and plot h-tep ahead point and 95% interval forecasts for the daily returns for h = 1, 2, ..., 10.
+
+```{r f}
+
+
+```
+
+## g) Compare the forecast intervals from part (c) with those from part (f). Do you observe any difference?
+
+```{r g}
+
+
+```
