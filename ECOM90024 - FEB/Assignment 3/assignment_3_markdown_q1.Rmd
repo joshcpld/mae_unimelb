@@ -34,8 +34,8 @@ theme_set(theme_minimal())
 * Before conducting the unit root test, I note:
 
    + Chart 1 below shows a plot of the data from the Case-Shiller US National Home Price Index, which seeks to measures the price level of existing single family-homes in the US. The data provided shows this price level from January 1987 to December 2022.
-
-   + There is a clear upward trend in this series over time, but there is also clear evidence of cyclical fluctuations in the data. It is unclear to what extent the curvature of this series is attributable to the trend or the incidence of cyclical fluctuations in the series over time. It's also possible that some of the shorter-term fluctuations (that seem to increase over time) could be attributable to seasonal patterns in the data. Testing and accounting for both of these deterministic patterns in the data is required to isolate the cyclical fluctuations.
+   
+   + While there is an upwards trend in this series over time, it is unclear to what extent this is driven by cyclical fluctuations in the data versus some kind of deterministic trend. There is also no clear evidence of seasonality in this data as the shorter-term fluctuations in the data seem to waver in terms of magnitude and frequency over time, and these fluctuations seem to dissipate during the mid-2000s and from 2020 onwards.
    
    + The clearest indicator of cyclical fluctuations in this data is the significant acceleration of growth in the series in the mid-2000s (and the decline which followed in 2007/2008), likely driven by the unsustainable household credit conditions that culminated in the US' sub-prime mortgage crisis that kicked off the Global Financial Crisis. 
 
@@ -64,144 +64,20 @@ ggplot(data, aes(x = date, y = price_level)) +
 
 * I then specify and estimate using OLS any deterministic trend and seasonality components I believe to exist:
 
-  + Given my observation above of a long-run upwards trend to this price level data, I consider it reasonable to account for this deterministically before conducting the unit root test. I test the fit of three different models and judge the linear trend model as the preferred one based off the output of model_selection_criteria table below. I have only tested the fit of these models up until the end of 2018 given the specified timeframe for our time series model in part (b). Chart 2 visualises their fits.
+  + Given my observations on Chart 1 above, there does not seem to be a particularly strong case for a deterministic trend in this data. While yes, there is an upward trend to the data, the fact that cyclical fluctuations seem to intensify around well known historical business cycle events (e.g. the subprime mortgage crisis) makes it difficult to conclude this upwards effects is owing primarily to trend factors rather than cyclical. Given the restrictiveness of a deterministic trend, and the lack of an overwhelming case for one, I will not be applying one to this series.
   
-  + Using the detrended series we are able to determine if there is any deterministic seasonality in the data: I conclude this is not the case. This is done by generating a collection of dummy variables for each month of the year, and then regressing the detrended series on these dummy variables (as seen in the summary of the seasonal_model object). None of the estimated ceofficients are statistically different from zero. Moreover, they are jointly equal to zero according to the reported overall F-statistic, which has a p-value greater than 0.05. Therefore, we can conclude that the seasonal means are not statistically different from zero and we do not have to de-season our data. 
+  + As outlined above, we also do not consider there is any clear evidence of deterministic seasonality in this data and therefore do not propose to amend it for any seasonal factors.
   
-  + This means the residuals of the linear model, or the detrended series, also represents the cyclical component of our time series.
+  + Therefore, this price level data reflects the detrended and seasonally adjusted series. I have not demeaned the series, which means we will use the "drift" specification for our Augmented Dicky Fuller (ADF) test.
 
 <br>
 
 ``` {r aii}
 
-################################################################################
-################### SPECIFYING DETERMINISTIC TRENDS ############################
-################################################################################
-
-################# GENERATING TREND COMPONENT OF TIME SERIES ####################
+################## ADJUSTING THE LENGTH OF THE TIME SERIES #####################
 
 data <- data %>% 
-  filter(date < as.Date("2019-01-01")) 
-
-data <- data %>% 
-  mutate(
-    
-    time = seq(1,length(data$price_level)),
-    time_square = time^2,
-    hits_log = log(price_level)
-    
-  )
-
-
-# ESTIMATING MODELS
-
-
-# Linear model
-
-price_model_linear <- lm(price_level ~ time, data = data)
-
-#Quadratic model
-
-price_model_quadratic <- lm(price_level ~ time + time_square, data = data)
-
-#Exponential model
-
-price_model_exponential_descaled <- nls(price_level ~ a*exp(b*time), start = list(a=8000, b = 0.01), data = data)
-
-
-# EXTRACTING MODEL FITS
-
-data <- data %>% 
-  mutate(
-    
-    linear_model = predict(price_model_linear),
-    
-    quadratic_model = predict(price_model_quadratic),
-    
-    exponential_model = predict(price_model_exponential_descaled)
-    
-  )
-
-
-ggplot(data, aes(x = date)) + 
-  geom_line(aes(y = price_level, colour = "Data")) +
-  geom_line(aes(y = linear_model, colour = "Linear")) + 
-  geom_line(aes(y = quadratic_model, colour = "Quadratic")) + 
-  geom_line(aes(y = exponential_model, colour = "Exponential")) + 
-  scale_color_manual(values = c("Data"= "black" ,"Linear" = "blue", "Quadratic" = "red", "Exponential" = "green")) +
-  labs(colour = "Model") +
-  labs(x = "Date", y = "Index", caption = "Source: S&P CoreLogic, Case-Shiller Home Price Index & author's calculations.") + 
-  ggtitle("Chart 2: US home price index with deterministic trend fits") +
-    theme(plot.caption = element_text(hjust = 0))
-
-# COMPARING MODEL OUTPUTS
-
-model_list <- list(price_model_linear, price_model_quadratic, price_model_exponential_descaled)
-
-model_names <- c("price_model_linear", "price_model_quadratic", "price_model_exponential_descaled")
-
-extract_criteria <- function(model, model_name) {
-  summary_data <- summary(model)
-  aic <- AIC(model)
-  bic <- BIC(model)
-  return(data.frame(Model = model_name, AIC = aic, BIC = bic))
-}
-
-model_selection_criteria <- map2_df(model_list, model_names, extract_criteria) %>% 
-  arrange(AIC)
-
-print(model_selection_criteria)
-
-# Linear model returns the lowest AIC/BIC. Therefore use this as the trend series.
-
-# Need to generate the detrended series to test for seasonal effects
-
-data <- data %>% 
-  mutate(
-    
-    detrended = resid(price_model_linear)
-    
-  )
-
-ggplot(data, aes(x = date)) + 
-  geom_line(aes(y = detrended)) + 
-  labs(x = "Date", y = "Index", caption = "Source: S&P CoreLogic, Case-Shiller Home Price Index & author's calculations.") + 
-  ggtitle("Chart 3: Detrended series of US home price index") +
-  theme(plot.caption = element_text(hjust = 0))
-
-################# GENERATING SEASONAL COMPONENT OF TIME SERIES #################
-
-
-
-data <- data %>% 
-  mutate(month = month(date)) %>% 
-  mutate(
-    
-    jan_dummy = case_when(month == 1 ~ 1, TRUE ~ 0),
-    feb_dummy = case_when(month == 2 ~ 1, TRUE ~ 0),
-    mar_dummy = case_when(month == 3 ~ 1, TRUE ~ 0),
-    apr_dummy = case_when(month == 4 ~ 1, TRUE ~ 0),
-    may_dummy = case_when(month == 5 ~ 1, TRUE ~ 0),
-    jun_dummy = case_when(month == 6 ~ 1, TRUE ~ 0),
-    jul_dummy = case_when(month == 7 ~ 1, TRUE ~ 0),
-    aug_dummy = case_when(month == 8 ~ 1, TRUE ~ 0),
-    sep_dummy = case_when(month == 9 ~ 1, TRUE ~ 0),
-    oct_dummy = case_when(month == 10 ~ 1, TRUE ~ 0),
-    nov_dummy = case_when(month == 11~ 1, TRUE ~ 0),
-    dec_dummy = case_when(month == 12 ~ 1, TRUE ~ 0),
-
-    
-  )
-
-seasonal_model <- lm(detrended ~ 0 + jan_dummy + feb_dummy + mar_dummy + 
-                       apr_dummy + may_dummy + jun_dummy + 
-                       jul_dummy + aug_dummy + sep_dummy +
-                       oct_dummy + nov_dummy + dec_dummy, 
-                     data = data)
-
-
-summary(seasonal_model)
-
+  filter(date < "2019-01-01") 
 
 ```
 
@@ -211,7 +87,17 @@ summary(seasonal_model)
 
 * Now we are ready to conduct the Augmented Dicky-Fuller (ADF) test:
 
-  + I first set the maximum number of potential lags for our ADF test using the Ng & Perron (1995) testing procedure. This is equal to 12 lags for our data.
+  + I first set the maximum number of potential lags for our ADF test (kmax) using the Ng & Perron (1995) testing procedure. For our data, this is equal to 17 lags.
+  
+  + I then perform the ADF test iteratively, starting with the numbers of lags suggested by kmax. If the t-statistic associated with the coefficient estimated on the last lagged difference is greater than 1.6 in absolute value then we use this number of lags. If not, then we continue reducing the number of lags by one until this occurs. I have used a loop to automate this process.
+  
+  + Importantly, because we have not demeaned the series, and we do not consider there is a deterministic trend we need to specify for this data, we have used the "drift" option for all of our ADF tests.
+  
+  + When conducting the ADF test on the level, our loop tells to use 13 lags for our test regression. The test statistic this generates is equal to -0.7225, which is much larger than all of the tau2 critical values generated. This means we cannot reject the null hypothesis that there is a unit root at any reasonable significance level.
+  
+  + When conducting the ADF test on the differenced series, our loop tells us to use 17 lags for our test regression. The test statistic it generates is equal to -3.0954. This value is smaller than the 5 per cent critical value of the test (-2.87). Therefore, we can reject the null hypothesis there is a unit root in this series at the 5 per cent confidence level. 
+  
+  + Therefore, we conclude this data is integrated order 1.
 
 
 
@@ -226,45 +112,385 @@ summary(seasonal_model)
 
 # SETTING KMAX
 
-kmax <- ceiling(12*(length(data$detrended)/100)^1/4)
+kmax <- ceiling(12*(length(data$price_level)/100)^(1/4))
 
-#
 
-for (i in 1:kmax-1){
+############################## ADF TEST ON LEVEL SERIES ########################
 
-  k = kmax+1-i    
+for (i in 1:(kmax-1)){
 
-  df.data = ur.df(data$detrended, type = "drift", lags = k)
+  k = kmax+1-i   
 
-  tstat = df.data@testreg$coefficients[k+2,3]
+  df_data_level = ur.df(data$price_level, type = "drift", lags = k)
+
+  tstat = df_data_level@testreg$coefficients[k+2,3]
 
   if(abs(tstat) >= 1.6){break}
+
 }
 
 k
 
+# SUMMARY OF ADF TEST
+
+summary(df_data_level)
+
+# Conclusion: cannot reject the null hypothesis at any reasonable significance level.
+
+
+
+
+############################## ADF TEST ON 1ST DIFF ############################
+
+for (i in 1:(kmax-1)){
+
+  k = kmax+1-i   
+
+  df_data_diff = ur.df(diff(data$price_level), type = "drift", lags = k)
+
+  tstat = df_data_diff@testreg$coefficients[k+2,3]
+
+  if(abs(tstat) >= 1.6){break}
+
+}
+
+k
+
+# SUMMARY OF ADF TEST
+
+summary(df_data_diff)
+
+# Conclusion: We reject the null hypothesis at the 5 per cent significance level and conclude this data is I(1)
+
+
 ```
-
-
-
-
-
-
-
 
 
 
 
 ## b) Using the data from January 1987 to December 2018, identify an estimate an approprite time series model. Make sure to report all relevant estimation results, plots, statistical tests and information criteria that you are relying on in determining your preferred model. (2 Marks)
 
-```{r b}
+<br>
+
+As we previously made the case it is not appropriate to apply any deterministic trends of seasonality to our series above, we will continue using the differenced demeaned series for forecasting in part (b). We use the differenced series because we've already established this demeaned series is I(1).
+
+<br>
+
+* We begin specifying our preferred time series model by confirming our differenced demeaned series is not white noise.
+
+  + This is because we only usefully model this data as an ARMA process if it demonstrates some level of dependence in the mean. After conducting the portmanteau Box-Pierce and Ljung-Box tests, we can verify this differenced demeaned data is not white noise. This is because both tests return a very small p-value, rejecting the null hypothesis of both tests that there is no autocorrelation in the time series. This implies dependence in this time series, suitable for ARMA modelling.
+
+```{r bi}
+
+
+############################# PORTMANTEAU TESTS ################################
+
+m = ceiling((sqrt(length(data$price_level))))
+
+Box.test(diff(data$price_level), lag = m, type = "Box-Pierce")
+
+Box.test(diff(data$price_level), lag = m, type = "Ljung-Box")
 
 
 ```
+* Generate the ACF and PACF of the differenced demeaned series to get a sense of their dependence. 
+
+  + Chart 2 shows the sample autocorrelation function (ACF) for the differenced demeaned US home price index for the 1st to the 20th lag. It shows there are signfiicant lags up to lag 15.
+  
+  + Chart 3 shows the sample partial autocorrelation function (PACF) for the differenced demeaned US home price index from the 1st to the 20th lag. There are significant lags up until lag 13.
+  
+  + Based of this information, this tells us that when choosing an ARIMA(p,d,q), we should search for a model with a p parameter up to order 15. We need a minimum value of 1 because we need to account for dependency in our model (ie. we know this isn't a white noise process). We will search for a model with a q parameter up to 4 given it's not advisable we have any more than 4 MA terms in our ARIMA model. 
+
+```{r bii}
+
+############ ANALYSING DEPENDENCE STRUCTURE OF DATA ############################
+
+acf <- acf(diff(data$price_level), plot = FALSE)
+pacf <- pacf(diff(data$price_level), plot = FALSE)
+
+plot(acf[1:20], main = "Chart 2: Sample ACF for the differenced US home price index series")
+plot(pacf[1:20], main = "Chart 3: Sample PACF for the differenced US home price index series")
+
+
+
+```
+
+<br>
+
+ * Estimate a range of ARMA(p,d,q) and choose your preferred model using AIC and BIC.
+ 
+    + Using our observations from above, we will search for models with paramters ranges of AR(1) - AR(15) and MA(0) - MA(4).
+  
+    + Using these minimum and maximum parameters values as inputs into a loop which estimates an ARMA model for every possible parameter combination, we are able to automate the comparison of their AIC and BIC values to determine which is our preferred model.
+    
+    + Unfortunately, AIC and BIC disagree about which model is preferable for forecasting (ARIMA(15,1,2) and ARIMA(13,1,0) respectively). BIC's preference is more parsimonious, and minimises the risk of overfitting for the available options. Therefore, we choose ARIMA(13,1,0).
+    
+  + Although this is our preferred model, and the best one using the tools currently available to us for this assignment, it is important to point out that this is not the perfect model.
+  
+  + By observing several diagnostics on the best_model object, it's clear there are several problems with this model. Firstly, Chart 6 shows us that some of the estimated roots of the lag polynomial for this model lie closely right on the unit circle boundary, which could be due to the time series being non-stationary, even though we were able to reject the null hypothesis of differenced series having a unit root at the 5 per cent level. Secondly, looking at the residuals of the model, it seems like they are heteroskedastic and therefore not covariance stationary, which is a problem because this likely means we have failed to incorporate some important information into the model. This hunch is confirmed by Charts 6 and 7 and the subsequent portmanteau tests, which show us the residuals are indeed not white noise.
+
+    
+```{r biii}
+
+################################################################################
+################### GENERATING AND EVALUATING ARMA MODELS ######################
+################################################################################
+
+######################### GENERATING BEST ARMA MODEL ###########################
+
+# Specify the parameter values from the ACF and PACF
+
+
+pstart = 1
+pend = 15
+
+qstart = 0 
+qend = 4
+
+#Generate the dataframe to store different ARMA(p,q) model combinations in
+
+prefix.ar <- "ar"
+suffix.ar <- seq(from = pstart, to = pend)
+
+prefix.ma <- "ma"
+suffix.ma <- seq(from = qstart, to = qend)
+
+ar.label <- paste(prefix.ar, suffix.ar, sep = "" )
+ma.label <- paste(prefix.ma, suffix.ma, sep = "")
+
+akaike <- data.frame(row.names = ar.label, matrix(NA,(pend-pstart+1),qend+1))
+colnames(akaike) <- ma.label
+
+bayes <- data.frame(row.names = ar.label, matrix(NA,(pend-pstart+1),qend+1))
+colnames(bayes) <- ma.label
+
+# Generate the loop required to iterate over different ARMA(p,q) combinations and store them appropriate in the dataframe provided above.
+
+for(i in pstart:pend){
+
+for(j in (qstart+1):(qend+1)){
+
+model <- try(Arima(data$price_level,
+order = c(i,1,j-1),
+include.mean = FALSE,
+include.drift = TRUE,
+method = "ML"))
+if(!inherits(model, "try-error") && model$code == 0){
+akaike[i,j] <- AIC(model)
+bayes[i,j]<- BIC(model)}
+}
+
+}
+
+# Code to try extract which model AIC and BIC prefers
+
+akaike.row <- rownames(akaike)[which(akaike == min(akaike, na.rm = TRUE),arr.ind = TRUE)[ , 1]]
+akaike.col <- colnames(akaike)[which(akaike == min(akaike, na.rm = TRUE),arr.ind = TRUE)[ , 2]]
+
+akaike.choice <- c(akaike.row, akaike.col) 
+
+print(akaike.choice)
+
+
+bayes.row <- rownames(bayes)[which(bayes == min(bayes, na.rm = TRUE),arr.ind = TRUE)[ , 1]]
+bayes.col <- colnames(akaike)[which(bayes == min(bayes, na.rm = TRUE),arr.ind = TRUE)[ , 2]]
+
+bayes.choice <- c(bayes.row, bayes.col)
+
+print(bayes.choice)
+
+
+
+
+############################# TESTING THE BEST MODEL FIT #######################
+
+ best_model <- Arima(data$price_level, 
+                     order = c(13,1,0),
+                     include.mean = FALSE,
+                     method = "ML")
+
+autoplot(best_model, main = "Chart 4: Estimated roots of the ARIMA(13,1,0) lag polynomial")
+
+plot(data$date, best_model$residuals,
+     main = "Chart 5: Residuals from ARIMA(13,1,0) model",
+     xlab = "Date",
+     ylab = "Residual",
+     type = "l",
+     ylim = c(-2,2))
+
+
+acf.resid <- acf(best_model$resid, plot = FALSE)
+pacf.resid <- pacf(best_model$resid, plot = FALSE)
+
+plot(acf.resid[1:20], main = "Chart 7: Sample ACF of residuals from the ARIMA(13,1,0) model")
+plot(pacf.resid[1:20], main = "Chart 8: Sample PACF of residuals from the ARIMA(13,1,0) model")
+
+
+Box.test(best_model$resid, type = "Box-Pierce", l = m)
+Box.test(best_model$resid, type = "Ljung-Box", l = m)
+
+```    
+    
+    
+    
 
 ## c) Using your estimation results from part b, compute and plot appropriate point and interval forecasts for the period spanning January 2019 to January 2022. Do the forecasts perform well when compared to the actual realisations? Why or why not?
 
-```{r c}
+
+``` {r ciii}
+
+############################# CREATING FORECASTING DATA ########################
+
+#CREATE DATAFRAME FOR FORECASTING
+
+data_fc <- read_csv("csindex.csv") %>% 
+  select(date = DATE, price_level = CSUSHPISA) %>% 
+  mutate(date = dmy(date)) %>% 
+  na.omit()
+
+
+data_fc <- data_fc  %>% 
+  mutate(time = seq(1,length(data_fc$price_level))) %>% 
+  filter(date >= as.Date("2019-01-01") & date < as.Date("2022-02-01"))
+
+forecast_intervals <- length(data_fc$date)
+
+
+
+############################# FORECASTING VALUES ###############################
+
+# OLD FORECAST
+
+data <- data %>% 
+  mutate(time = seq(1,length(data$price_level)))
+
+price_model_linear_old <- lm(price_level ~ time, data = data)
+
+old_data_fc <- data_fc %>% 
+  mutate(old_trend_forecast = predict(price_model_linear_old))
+
+
+
+
+data_fc <- data_fc %>% 
+  mutate(old_trend_forecast = predict(price_model_linear)) 
+
+old_best_model <- Arima(data$cyclical, 
+                     order = c(13,0,3),
+                     include.mean = FALSE,
+                     xreg = data$linear_model,
+                     method = "CSS-ML")
+
+
+
+old_best_model <- Arima(data$cyclical, 
+                     order = c(13,0,3),
+                     include.mean = FALSE,
+                     xreg = data$linear_model,
+                     method = "CSS-ML")
+
+old_trend_forecast <- predict(price_model_linear, newdata = data_fc)
+
+old_cyclical_forecast <- forecast(old_best_model, h = forecast_intervals, xreg = old_trend_forecast) %>% 
+  data.frame() %>% 
+  select(point_estimate_old = Point.Forecast, low_prediction_interval_old = Lo.95, high_prediction_interval_old = Hi.95) %>% 
+  cbind(old_trend_forecast)
+
+
+############################## EXTRACTING MODEL OUTPUTS ########################
+
+#NEW FORECAST
+
+data_fc_new <- data_fc %>% 
+  mutate(
+    
+      point_estimate_fc_new = point_estimate_new,
+    high_prediction_interval_fc_new = high_prediction_interval_new,
+    low_prediction_interval_fc_new = low_prediction_interval_new
+    
+  )
+
+#OLD FORECAST
+
+
+data_fc_old <- data_fc %>% 
+ mutate(
+    
+      point_estimate_fc_old = point_estimate_old + old_trend_forecast,
+    high_prediction_interval_fc_old = high_prediction_interval_old + old_trend_forecast,
+    low_prediction_interval_fc_old = low_prediction_interval_old + old_trend_forecast
+    
+  ) 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+data_fc <- data_fc %>% 
+  cbind(new_forecast, old_trend_forecast, old_cyclical_forecast)
+
+#CREATING FINAL FORECAST PROFILE
+
+data_fc <- data_fc %>% 
+  # New forecast
+  mutate(
+    
+      point_estimate_fc_new = point_estimate_new,
+    high_prediction_interval_fc_new = high_prediction_interval_new,
+    low_prediction_interval_fc_new = low_prediction_interval_new
+    
+  )
+  # Old forecast
+
+data_fc <- data_fc %>% 
+ mutate(
+    
+      point_estimate_fc_old = point_estimate_old + old_trend_forecast,
+    high_prediction_interval_fc_old = high_prediction_interval_old + old_trend_forecast,
+    low_prediction_interval_fc_old = low_prediction_interval_old + old_trend_forecast
+    
+  ) 
+    
+    
+    %>% 
+  select(date, point_estimate_fc_new, high_prediction_interval_fc_new, low_prediction_interval_fc_new, point_estimate_fc_old, high_prediction_interval_fc_old, low_prediction_interval_fc_old)
+
+
+
+# CREATING FINAL DATAFRAME
+
+data_final <- read_csv("csindex.csv") %>% 
+  select(date = DATE, price_level = CSUSHPISA) %>% 
+    mutate(date = dmy(date)) %>% 
+  na.omit() %>% 
+  filter(date < as.Date("2022-02-01")) %>% 
+  left_join(data_fc, by = "date")
+
+
+################################ CHARTING FINAL RESULTS ########################
+
+ggplot(data_final, aes(x = date)) + 
+  geom_line(aes(y = price_level)) +
+  geom_line(aes(y = point_estimate_fc_new, color = "Point Estimate")) +
+  geom_line(aes(y = point_estimate_fc_old, color = "Point Estimate")) +
+  scale_color_manual(values = c("Point Estimate" = "red", "95% Prediction Interval" = "blue"))
 
 
 ```
+
+
