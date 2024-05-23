@@ -11,6 +11,9 @@ library(tidyverse)
 library(lubridate)
 library(forecast)
 library(urca)
+library(tseries)
+library(rugarch)
+library(janitor)
 
 theme_set(theme_minimal())
 
@@ -23,6 +26,8 @@ theme_set(theme_minimal())
 # library(lubridate)
 # library(forecast)
 # library(urca)
+# library(tseries)
+# library(rugarch)
 
 ```
 
@@ -37,7 +42,7 @@ theme_set(theme_minimal())
    
    + While there is an upwards trend in this series over time, it is unclear to what extent this is driven by cyclical fluctuations in the data versus some kind of deterministic trend. There is also no clear evidence of seasonality in this data as the shorter-term fluctuations in the data seem to waver in terms of magnitude and frequency over time, and these fluctuations seem to dissipate during the mid-2000s and from 2020 onwards.
    
-   + The clearest indicator of cyclical fluctuations in this data is the significant acceleration of growth in the series in the mid-2000s (and the decline which followed in 2007/2008), likely driven by the unsustainable household credit conditions that culminated in the US' sub-prime mortgage crisis that kicked off the Global Financial Crisis. 
+   + The clearest indicator of cyclical fluctuations in this data is the significant acceleration of growth in the series in the mid-2000s (and the decline which followed in 2007/2008), likely driven by the unsustainable household credit conditions that culminated in the US' sub-prime mortgage crisis that kicked off the Global Financial Crisis. The enormous acceleration in growth from 2020 onwards is also a clear sign of 
 
 <br>
 
@@ -58,32 +63,26 @@ ggplot(data, aes(x = date, y = price_level)) +
   theme(plot.title = element_text(size = 10),
         plot.caption = element_text(hjust = 0))
 
+
 ```
 
 <br>
 
 * I then specify and estimate using OLS any deterministic trend and seasonality components I believe to exist:
 
-  + Given my observations on Chart 1 above, there does not seem to be a particularly strong case for a deterministic trend in this data. While yes, there is an upward trend to the data, the fact that cyclical fluctuations seem to intensify around well known historical business cycle events (e.g. the subprime mortgage crisis) makes it difficult to conclude this upwards effects is owing primarily to trend factors rather than cyclical. Given the restrictiveness of a deterministic trend, and the lack of an overwhelming case for one, I will not be applying one to this series.
+  + Given my observations on Chart 1 above, there does not seem to be a particularly strong case for a deterministic trend in this data. While yes, there is an upward trend to the data, the fact that cyclical fluctuations seem to intensify around well known historical business cycle events (e.g. the subprime mortgage crisis) makes it difficult to conclude this upwards effects is owing primarily to trend factors rather than cyclical. Given the restrictiveness of a deterministic trend, and the lack of an overwhelming case for one, I will not be applying one to this series. [NOTE: GIVEN THERE IS SUCH A DRAMATIC CHANGE IN THE SHAPE OF THE LINE FOLLOWING THE END OF THE ESTIMATIONG PERIOD I THINK IT WOULD BE TOO RESTRICTIVE TO INCLUDE A TREND TRERM]
   
   + As outlined above, we also do not consider there is any clear evidence of deterministic seasonality in this data and therefore do not propose to amend it for any seasonal factors.
   
   + Therefore, this price level data reflects the detrended and seasonally adjusted series. I have not demeaned the series, which means we will use the "drift" specification for our Augmented Dicky Fuller (ADF) test.
 
-<br>
-
 ``` {r aii}
 
-################## ADJUSTING THE LENGTH OF THE TIME SERIES #####################
-
 data <- data %>% 
-  filter(date < "2019-01-01") 
+  filter(date < as.Date("2019-01-01")) 
+
 
 ```
-
-
-<br>
-
 
 * Now we are ready to conduct the Augmented Dicky-Fuller (ADF) test:
 
@@ -135,7 +134,7 @@ k
 
 summary(df_data_level)
 
-# Conclusion: cannot reject the null hypothesis at any reasonable significance level.
+# Conclusion: We cannot reject the null hypothesis at the 1 per cent level. Therefore, due to how problematic unit roots are for time series analysis, we difference the data.
 
 
 
@@ -241,117 +240,262 @@ plot(pacf[1:20], main = "Chart 3: Sample PACF for the differenced US home price 
 # Specify the parameter values from the ACF and PACF
 
 
-pstart = 1
-pend = 15
-
-qstart = 0 
-qend = 4
-
-#Generate the dataframe to store different ARMA(p,q) model combinations in
-
-prefix.ar <- "ar"
-suffix.ar <- seq(from = pstart, to = pend)
-
-prefix.ma <- "ma"
-suffix.ma <- seq(from = qstart, to = qend)
-
-ar.label <- paste(prefix.ar, suffix.ar, sep = "" )
-ma.label <- paste(prefix.ma, suffix.ma, sep = "")
-
-akaike <- data.frame(row.names = ar.label, matrix(NA,(pend-pstart+1),qend+1))
-colnames(akaike) <- ma.label
-
-bayes <- data.frame(row.names = ar.label, matrix(NA,(pend-pstart+1),qend+1))
-colnames(bayes) <- ma.label
-
-# Generate the loop required to iterate over different ARMA(p,q) combinations and store them appropriate in the dataframe provided above.
-
-for(i in pstart:pend){
-
-for(j in (qstart+1):(qend+1)){
-
-model <- try(Arima(data$price_level,
-order = c(i,1,j-1),
-include.mean = FALSE,
-include.drift = TRUE,
-method = "ML"))
-if(!inherits(model, "try-error") && model$code == 0){
-akaike[i,j] <- AIC(model)
-bayes[i,j]<- BIC(model)}
-}
-
-}
-
-# Code to try extract which model AIC and BIC prefers
-
-akaike.row <- rownames(akaike)[which(akaike == min(akaike, na.rm = TRUE),arr.ind = TRUE)[ , 1]]
-akaike.col <- colnames(akaike)[which(akaike == min(akaike, na.rm = TRUE),arr.ind = TRUE)[ , 2]]
-
-akaike.choice <- c(akaike.row, akaike.col) 
-
-print(akaike.choice)
-
-
-bayes.row <- rownames(bayes)[which(bayes == min(bayes, na.rm = TRUE),arr.ind = TRUE)[ , 1]]
-bayes.col <- colnames(akaike)[which(bayes == min(bayes, na.rm = TRUE),arr.ind = TRUE)[ , 2]]
-
-bayes.choice <- c(bayes.row, bayes.col)
-
-print(bayes.choice)
-
-
+# pstart = 1
+# pend = 15
+# 
+# qstart = 0 
+# qend = 4
+# 
+# #Generate the dataframe to store different ARMA(p,q) model combinations in
+# 
+# prefix.ar <- "ar"
+# suffix.ar <- seq(from = pstart, to = pend)
+# 
+# prefix.ma <- "ma"
+# suffix.ma <- seq(from = qstart, to = qend)
+# 
+# ar.label <- paste(prefix.ar, suffix.ar, sep = "" )
+# ma.label <- paste(prefix.ma, suffix.ma, sep = "")
+# 
+# akaike <- data.frame(row.names = ar.label, matrix(NA,(pend-pstart+1),qend+1))
+# colnames(akaike) <- ma.label
+# 
+# bayes <- data.frame(row.names = ar.label, matrix(NA,(pend-pstart+1),qend+1))
+# colnames(bayes) <- ma.label
+# 
+# # Generate the loop required to iterate over different ARMA(p,q) combinations and store them appropriate in the dataframe provided above.
+# 
+# for(i in pstart:pend){
+# 
+# for(j in (qstart+1):(qend+1)){
+# 
+# model <- try(Arima(data$price_level,
+# order = c(i,1,j-1),
+# include.mean = FALSE,
+# include.drift = TRUE,
+# method = "ML"))
+# if(!inherits(model, "try-error") && model$code == 0){
+# akaike[i,j] <- AIC(model)
+# bayes[i,j]<- BIC(model)}
+# }
+# 
+# }
+# 
+# # Code to try extract which model AIC and BIC prefers
+# 
+# akaike.row <- rownames(akaike)[which(akaike == min(akaike, na.rm = TRUE),arr.ind = TRUE)[ , 1]]
+# akaike.col <- colnames(akaike)[which(akaike == min(akaike, na.rm = TRUE),arr.ind = TRUE)[ , 2]]
+# 
+# akaike.choice <- c(akaike.row, akaike.col) 
+# 
+# print(akaike.choice)
+# 
+# 
+# bayes.row <- rownames(bayes)[which(bayes == min(bayes, na.rm = TRUE),arr.ind = TRUE)[ , 1]]
+# bayes.col <- colnames(akaike)[which(bayes == min(bayes, na.rm = TRUE),arr.ind = TRUE)[ , 2]]
+# 
+# bayes.choice <- c(bayes.row, bayes.col)
+# 
+# print(bayes.choice)
 
 
-############################# TESTING THE BEST MODEL FIT #######################
+aic_best_model <- auto.arima(data$price_level,
+                         
+                         #Parameter values
+                         
+                         start.p = 1,
+                         max.p = 15,
+                         max.d = 1,
+                         max.q = 4,
+                         
+                         #Other options
+                         stepwise = FALSE, #To ensure an exhaustive search
+                         ic = "aic"
+                         
+                         )
 
- best_model <- Arima(data$price_level, 
-                     order = c(13,1,0),
+summary(aic_best_model)
+
+bic_best_model <- auto.arima(data$price_level,
+                         
+                         #Parameter values
+                         
+                         start.p = 1,
+                         max.p = 15,
+                         max.d = 1,
+                         max.q = 4,
+                         
+                         #Other options
+                         stepwise = FALSE, #To ensure an exhaustive search
+                         ic = "bic"
+                         
+                         )
+
+summary(bic_best_model)
+
+# AIC chooses ARIMA(3,1,2) whereas BIC chooses ARIMA(1,1,2). We will use the more parsimonious model, as specified by BIC.
+
+mean_eqn <- Arima(data$price_level,
+                     order = c(1,1,2),
                      include.mean = FALSE,
-                     method = "ML")
-
-autoplot(best_model, main = "Chart 4: Estimated roots of the ARIMA(13,1,0) lag polynomial")
-
-plot(data$date, best_model$residuals,
-     main = "Chart 5: Residuals from ARIMA(13,1,0) model",
-     xlab = "Date",
-     ylab = "Residual",
-     type = "l",
-     ylim = c(-2,2))
+                     method = "CSS-ML")
 
 
-acf.resid <- acf(best_model$resid, plot = FALSE)
-pacf.resid <- pacf(best_model$resid, plot = FALSE)
+####################### TESTING GENERAL MODEL DIAGNOSTICS ######################
 
-plot(acf.resid[1:20], main = "Chart 7: Sample ACF of residuals from the ARIMA(13,1,0) model")
-plot(pacf.resid[1:20], main = "Chart 8: Sample PACF of residuals from the ARIMA(13,1,0) model")
+autoplot(mean_eqn, main = "Chart 4: Estimated roots of the ARIMA(1,1,2) lag polynomial")
+
+mean_eqn_res <- mean_eqn$resid
+
+plot(mean_eqn_res, main = "Chart 5: Residuals of ARIMA(1,1,2) model")
 
 
-Box.test(best_model$resid, type = "Box-Pierce", l = m)
-Box.test(best_model$resid, type = "Ljung-Box", l = m)
+
+############################# TESTING FOR ARCH EFFECTS #########################
+
+# Extracting residuals
+
+mean_eqn_res_sq <- mean_eqn_res^2
+
+acf.res <- acf(mean_eqn_res_sq, plot = FALSE)
+pacf.res <- pacf(mean_eqn_res_sq, plot = FALSE)
+
+plot(acf.res[1:20], main = "Chart 6: ACF of squared residuals from ARIMA(3,1,2) model")
+
+plot(pacf.res[1:20], main = "Chart 7: PACF of squared residuals from ARIMA(3,1,2) model")
+
+
+# There are many significant lags in the ACF and PACF, therefore adding an ARCH variance to this model would likely improve model fit.
+
+# This is confirmed by our portmanteau tests below, which tell us the squared residuals are indeed not white noise.
+
+Box.test(mean_eqn_res_sq, type = "Box-Pierce", l = m)
+Box.test(mean_eqn_res_sq, type = "Ljung-Box", l = m)
+
 
 ```    
     
-    
-    
+<br>
 
-## c) Using your estimation results from part b, compute and plot appropriate point and interval forecasts for the period spanning January 2019 to January 2022. Do the forecasts perform well when compared to the actual realisations? Why or why not?
+[INSERT GARCH MODEL TEXT]
+
+<br>
 
 
-``` {r ciii}
+``` {r biv}
+
+########################### ESTIMATING ARCH MODELS #############################
+
+z = 12
+
+prefix.arch <- "arch"
+suffix.arch <- seq(1,z)
+
+arch.label <- paste(prefix.arch, suffix.arch, sep = "" )
+
+arch.info <- data.frame(row.names = arch.label, matrix(NA,z,2))
+
+colnames(arch.info) <- c("aic","bic") 
+
+T <- length(mean_eqn_res)
+
+for(i in 1:z){
+archmod <- garch(mean_eqn_res, order = c(0,i))
+arch.info[i,1] <- AIC(archmod)
+arch.info[i,2] <- AIC(archmod, k = log(T-i-1))
+}
+
+akaike.choice <- rownames(arch.info)[which.min(arch.info[,1])]
+bayes.choice <- rownames(arch.info)[which.min(arch.info[,2])]
+
+akaike.choice
+bayes.choice
+
+########################## REXAMINING RESIDUALS ################################
+
+
+archmod <- garch(mean_eqn_res, order = c(0,12))
+
+archmod.res <- archmod$residuals
+
+archmod.res <- na.omit(archmod.res)
+
+plot(archmod.res, col = "red", main = "Standardised Residuals from ARCH Equation", type = "l")
+
+archmod.ressq <- archmod.res^2
+
+plot(archmod.ressq, col = "darkorchid", main = "Squared Standardised Residuals from ARCH Equation", type = "l")
+
+
+######################## VERIFYING IF ARCH EFFECTS ARE GONE ####################
+
+Box.test(archmod.ressq, lag = m, type = "Box-Pierce")
+
+Box.test(archmod.ressq, lag = m, type = "Ljung-Box")
+
+
+
+########### TESTING IF A GARCH(1,1) MODEL GIVES SIMILAR RESULTS ################
+
+garchmod <- garch(mean_eqn_res, order = c(1,1))
+
+garchmod.res <- garchmod$residuals
+
+garchmod.res <- na.omit(garchmod.res)
+
+garchmod.ressq <- garchmod.res^2
+
+plot(garchmod.res, col = "red", main = "Standardised Residuals from GARCH Equation", type = "l")
+
+plot(garchmod.ressq, col ="darkorchid", main = "Squared Standardised Residuals from GARCH Equation", type = "l")
+
+Box.test(garchmod.ressq, lag = m, type = "Box-Pierce")
+
+Box.test(garchmod.ressq, lag = m, type = "Ljung-Box")
+
+# The GARCH(1,1) model fails to remove ARCH effects from the squared residuals!
+
+
+
+################################# CREATING FINAL MODEL #########################
+
+
+# My chosen model for this time series if an ARIMA(1,1,2)-ARCH(12) model.
+
+# rugarch cannot handle differencing the data so we need to do this ourselves and then re-integrate after deriving forecasts
+
+price_level_diff <- diff(data$price_level)
+
+final_model <- ugarchspec(
+  
+  variance.model = list(model ="sGARCH", garchOrder = c(12,0)),
+  
+  mean.model = list(armaOrder = c(1,2), include.mean = TRUE),
+  
+  distribution.model = "norm"
+  
+)
+
+
+```
+
+
+## c) Using your estimation results from part b, compute and plot appropriate point and interval forecasts for the period spanning January 2019 to January 2022. Do the forecasts perform well when compared to the actual realisations? Why or why not? Compare the forecasts using RMSE and MAE metrics.
+
+
+``` {r ci}
 
 ############################# CREATING FORECASTING DATA ########################
-
-#CREATE DATAFRAME FOR FORECASTING
 
 data_fc <- read_csv("csindex.csv") %>% 
   select(date = DATE, price_level = CSUSHPISA) %>% 
   mutate(date = dmy(date)) %>% 
   na.omit()
-
-
+  
 data_fc <- data_fc  %>% 
-  mutate(time = seq(1,length(data_fc$price_level))) %>% 
-  filter(date >= as.Date("2019-01-01") & date < as.Date("2022-02-01"))
+  filter(date >= as.Date("2019-01-01") & date < as.Date("2022-02-01")) 
+
+#Set number of forecast intervals based in forecast data
 
 forecast_intervals <- length(data_fc$date)
 
@@ -359,137 +503,121 @@ forecast_intervals <- length(data_fc$date)
 
 ############################# FORECASTING VALUES ###############################
 
-# OLD FORECAST
+final_model_forecast_fit_diff <- ugarchfit(spec = final_model, data = price_level_diff)
 
-data <- data %>% 
-  mutate(time = seq(1,length(data$price_level)))
-
-price_model_linear_old <- lm(price_level ~ time, data = data)
-
-old_data_fc <- data_fc %>% 
-  mutate(old_trend_forecast = predict(price_model_linear_old))
-
-
-
-
-data_fc <- data_fc %>% 
-  mutate(old_trend_forecast = predict(price_model_linear)) 
-
-old_best_model <- Arima(data$cyclical, 
-                     order = c(13,0,3),
-                     include.mean = FALSE,
-                     xreg = data$linear_model,
-                     method = "CSS-ML")
-
-
-
-old_best_model <- Arima(data$cyclical, 
-                     order = c(13,0,3),
-                     include.mean = FALSE,
-                     xreg = data$linear_model,
-                     method = "CSS-ML")
-
-old_trend_forecast <- predict(price_model_linear, newdata = data_fc)
-
-old_cyclical_forecast <- forecast(old_best_model, h = forecast_intervals, xreg = old_trend_forecast) %>% 
-  data.frame() %>% 
-  select(point_estimate_old = Point.Forecast, low_prediction_interval_old = Lo.95, high_prediction_interval_old = Hi.95) %>% 
-  cbind(old_trend_forecast)
-
+final_model_forecast_diff <- ugarchforecast(final_model_forecast_fit_diff, n.ahead = forecast_intervals)
 
 ############################## EXTRACTING MODEL OUTPUTS ########################
 
-#NEW FORECAST
-
-data_fc_new <- data_fc %>% 
+cond_mean_forecast <- data.frame(final_model_forecast_diff@forecast$seriesFor) %>%  clean_names() %>% 
+  select(cond_mean = x1971_01_19) %>% 
+  mutate(cond_mean_cumsum = cumsum(cond_mean)) %>% 
+  select(cond_mean = cond_mean_cumsum)
+  
+cond_var_forecast <- data.frame(final_model_forecast_diff@forecast$sigmaFor) %>% 
+  clean_names() %>% 
+  select(cond_var = x1971_01_19) %>%
+    mutate(upper_interval = cond_var * 1.96) %>% 
+  mutate(lower_interval = cond_var * -1.96) %>% 
   mutate(
     
-      point_estimate_fc_new = point_estimate_new,
-    high_prediction_interval_fc_new = high_prediction_interval_new,
-    low_prediction_interval_fc_new = low_prediction_interval_new
+    upper_cumsum = cumsum(upper_interval),
+    lower_cumsum = cumsum(lower_interval),
     
-  )
+    ) %>% 
+  select(upper_forecast_interval = upper_cumsum, lower_forecast_interval = lower_cumsum)
 
-#OLD FORECAST
-
-
-data_fc_old <- data_fc %>% 
- mutate(
-    
-      point_estimate_fc_old = point_estimate_old + old_trend_forecast,
-    high_prediction_interval_fc_old = high_prediction_interval_old + old_trend_forecast,
-    low_prediction_interval_fc_old = low_prediction_interval_old + old_trend_forecast
-    
-  ) 
+garch_forecast <- cond_mean_forecast %>% 
+  cbind(cond_var_forecast) 
 
 
+# Re-integrate the forecasts
 
+last_value <- head(data_fc,1) %>% 
+  pull(price_level)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-data_fc <- data_fc %>% 
-  cbind(new_forecast, old_trend_forecast, old_cyclical_forecast)
-
-#CREATING FINAL FORECAST PROFILE
-
-data_fc <- data_fc %>% 
-  # New forecast
+garch_forecast <- garch_forecast %>% 
+  mutate(cond_mean = cond_mean + last_value) %>% 
   mutate(
     
-      point_estimate_fc_new = point_estimate_new,
-    high_prediction_interval_fc_new = high_prediction_interval_new,
-    low_prediction_interval_fc_new = low_prediction_interval_new
+    upper_forecast_interval = upper_forecast_interval + last_value,
+    lower_forecast_interval = lower_forecast_interval + last_value,
     
-  )
+         
+         ) %>% 
+  select(new_point_estimate = cond_mean, new_high_prediction_interval = upper_forecast_interval,
+         new_low_prediction_interval = lower_forecast_interval) %>% 
+  cbind(data_fc) %>% 
+  select(date, new_point_estimate, new_high_prediction_interval, new_low_prediction_interval)
+
+############################## IMPORTING ASSIGNEMNT 2 FORECAST #################
+
+
+old_forecast <- read_csv("data_final.csv") %>% 
+  mutate(date = dmy(date))
+
+
+############################## FINAL DATAFRAME #################################
+
+data_final <- old_forecast %>% 
+  left_join(garch_forecast, by = "date")
+
+
+############################## CHARTING RESULTS ################################
+
+ggplot(data_final, aes(x = date)) +
+  geom_line(aes(y = price_level)) + 
+  
   # Old forecast
-
-data_fc <- data_fc %>% 
- mutate(
-    
-      point_estimate_fc_old = point_estimate_old + old_trend_forecast,
-    high_prediction_interval_fc_old = high_prediction_interval_old + old_trend_forecast,
-    low_prediction_interval_fc_old = low_prediction_interval_old + old_trend_forecast
-    
-  ) 
-    
-    
-    %>% 
-  select(date, point_estimate_fc_new, high_prediction_interval_fc_new, low_prediction_interval_fc_new, point_estimate_fc_old, high_prediction_interval_fc_old, low_prediction_interval_fc_old)
-
-
-
-# CREATING FINAL DATAFRAME
-
-data_final <- read_csv("csindex.csv") %>% 
-  select(date = DATE, price_level = CSUSHPISA) %>% 
-    mutate(date = dmy(date)) %>% 
-  na.omit() %>% 
-  filter(date < as.Date("2022-02-01")) %>% 
-  left_join(data_fc, by = "date")
+  
+  geom_line(aes(y = old_point_estimate, colour = "Old forecast")) + 
+  geom_line(aes(y = old_high_prediction_interval, colour = "Old forecast"), linetype = "dashed") +
+  geom_line(aes(y = old_low_prediction_interval, colour = "Old forecast"), linetype = "dashed") +
+  
+  # New forecast
+  
+    geom_line(aes(y = new_point_estimate, colour = "New forecast")) + 
+  geom_line(aes(y = new_high_prediction_interval, colour = "New forecast"), linetype = "dashed") +
+  geom_line(aes(y = new_low_prediction_interval, colour = "New forecast"), linetype = "dashed") +
+  
+  scale_colour_manual(name = "Forecast type",
+                      values = c("Old forecast" = "red", "New forecast" = "blue")) + 
+  
+  ggtitle("Chart X: Price level existing family homes in the USE from January 1987 to January 2022 \n with old (ARMA(13,3) w/ deterministic trend) and new (ARIMA(1,1,2)-ARCH(12)") +
+  
+    theme(plot.title = element_text(size = 10),
+        plot.caption = element_text(hjust = 0),
+        legend.position = c(0.05, 0.90),
+        legend.justification = c(0, 1))
 
 
-################################ CHARTING FINAL RESULTS ########################
+############################## FORMALLY COMPARING FORECASTS ####################
 
-ggplot(data_final, aes(x = date)) + 
-  geom_line(aes(y = price_level)) +
-  geom_line(aes(y = point_estimate_fc_new, color = "Point Estimate")) +
-  geom_line(aes(y = point_estimate_fc_old, color = "Point Estimate")) +
-  scale_color_manual(values = c("Point Estimate" = "red", "95% Prediction Interval" = "blue"))
+forecast_metric_data <- data_final %>% 
+  select(date,price_level, old_point_estimate, new_point_estimate) %>% 
+  na.omit()
 
+
+# CALCULATE RMSE
+
+rmse_old <- sqrt(mean((forecast_metric_data$price_level - forecast_metric_data$old_point_estimate)^2))
+
+rmse_new <- sqrt(mean((forecast_metric_data$price_level - forecast_metric_data$new_point_estimate)^2))
+
+rmse_old
+
+rmse_new
+
+
+# CALCULATE MAE
+
+mae_old <- mean(abs(forecast_metric_data$price_level - forecast_metric_data$old_point_estimate))
+
+mae_new <- mean(abs(forecast_metric_data$price_level - forecast_metric_data$new_point_estimate))
+
+mae_old
+
+mae_new
 
 ```
 

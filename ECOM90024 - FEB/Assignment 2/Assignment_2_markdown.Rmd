@@ -497,7 +497,7 @@ ggplot(data_final, aes(x = date)) +
 
 
 
-  
+write_csv(data_final, "data_final.csv")
 
 
 ```
