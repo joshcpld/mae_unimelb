@@ -83,7 +83,7 @@ Now we are ready to conduct the Augmented Dicky-Fuller (ADF) test:
   
  * As this cyclical series reflects the demeaned, detrended and seasonally adjusted series, we use the "none" option (Model 1) or our ADF test, as we've already accounted for the trend and drift term within the price level.
   
- * Using 13 lags we conduct the ADF test on the level of our cyclical series and extract a test statistic of -1.1345. This is larger than all of the relevant critical values, and therefore fail to reject the null hypothesis of there being a unit root in this series.
+ * Using 13 lags we conduct the ADF test on the level of our cyclical series and extract a test statistic of -1.1345. This is larger than all of the relevant critical values. Therefore fail to reject the null hypothesis of there being a unit root in this series, meaning we must difference the data and test again.
    
  * Using 17 lags, we conduct the ADF test on the differenced cyclical series and extract a test statistic of -2.716. This is larger than all of the given critical values in our test. Therefore reject the null hypothesis of there being a unit root in the differenced series at any reasonable significance level.
     
@@ -177,13 +177,13 @@ Box.test(diff(data$price_level), lag = m, type = "Ljung-Box")
 
 <br>
 
-We then need to generate the ACF and PACF of our cyclical series to get a sense of their dependence. When doing this, we need to use the differenced series as it is I(1)
+We then need to generate the ACF and PACF of our cyclical series to get a sense of their dependence. When doing this, we need to use the differenced series as it is I(1), and it is the differenced data we are creating a time series model for.
 
- * Chart 3 shows the sample autocorrelation function (ACF) for the differenced demeaned US home price index for the 1st to the 20th lag. It shows there are significant lags up to lag 15.
+ * Chart 3 shows the sample autocorrelation function (ACF) for the differenced demeaned US home price index for the 1st to the 20th lag. It shows there are significant lags up to lag 18.
 
  * Chart 4 shows the sample partial autocorrelation function (PACF) for the differenced demeaned US home price index from the 1st to the 20th lag.There are significant lags up until lag 13.
  
- * Based of this information, this tells us that when choosing an ARIMA(p,d,q), we should search for a model with a p parameter up to order 15. We need a minimum value of 1 because we need to account for dependency in our model (ie. we know this isn't a white noise process). We will search for a model with a q parameter up to 4 given it's not advisable we have any more than 4 MA terms in our ARIMA model. 
+ * Based of this information, this tells us that when choosing an ARIMA(p,d,q), we should search for a model with a p parameter up to order 18. We need a minimum value of 1 because we need to account for dependency in our model (ie. we know this isn't a white noise process). We will search for a model with a q parameter up to 4 given it's not advisable we have any more than 4 MA terms in our ARIMA model. 
 
 ```{r bii}
 
@@ -226,7 +226,7 @@ aic_best_model <- auto.arima(data$price_level,
                          #Parameter values
                          
                          start.p = 1,
-                         max.p = 15,
+                         max.p = 18,
                          max.d = 1,
                          max.q = 4,
                          
@@ -315,7 +315,7 @@ Box.test(mean_eqn_res_sq, type = "Ljung-Box", l = m)
 
 Now we need to estimate our ARCH model:
 
- * From Chart 7, we can see there are significant ACF lags in the squared residuals up to lag 15. Therefore, we will test for models with ARCH terms up to order 15.
+ * From Chart 7, we can see there are significant ACF lags in the squared residuals up to lag 15. Therefore, we will test for models with ARCH terms up to order 15. Please note, estimating all of these models added dozens of pages to the printout for my submission. I have removed most of them from this pdf for brevity.
  
  * Using AIC/BIC we determine our preferred model, where both measures give different results: ARCH(13) and ARCH(12) respectively. We will go with the more parsimonious ARCH(12) from the BIC.
  
@@ -323,15 +323,16 @@ Now we need to estimate our ARCH model:
    
   + The residuals now look much more like white noise (Chart 9)
   
-  + Our portmanteau tests both return large p-values (both > 0.05), meaning we cannot reject the null hypothesis the standardised squared residuals from this ARCH(13) model are white noise. This confirms the ARCH effects have been dealt with in this model.
+  + Our portmanteau tests both return large p-values (both > 0.05), meaning we cannot reject the null hypothesis the standardised squared residuals from this ARCH(12) model are white noise. This confirms the ARCH effects have been dealt with in this model.
   
 * However, for completeness, we check if a more parsimonious GARCH(1,1) sufficiently arrives at the same solution. We don't find this is the case, as the portmanteau tests on those standardised square residuals both return very small p-values. This means we reject the null hypothesis that this series is white noise, and conclude it has not dealt effectively with the ARCH effects present in the squared residuals. Therefore, we stay with our ARCH(13) model.
 
 
 <br>
 
-Ultimately, after all this analysis, we settle on an ARIMA(1,1,2)-ARCH(13) model as our preferred model for forecasting the cyclical components of our time series.
- 
+Ultimately, after all this analysis, we settle on an ARIMA(1,1,2)-ARCH(12) model as our preferred model for forecasting the cyclical components of our time series.
+  
+<br>
  
 
 ```{r bv}
@@ -440,7 +441,7 @@ Before commenting on the overall efficacy of these forecasts, first some observa
 
  * Firstly, the old forecast is wavy rather than straight. This suggests there is some kind of complex root in the estimated process (ARMA(13,3)) we used to forecast this series in Assignment 2. The fact this is no longer the case in our new forecasts suggest we have appropriately dealt with the unit roots present in this time series.
  
- * Secondly, the prediction intervals for the new model we have generated are notably wider than the ARMA model. This is due to the fact we have modelled a conditional variance, where its time varying nature means prediction intervals must accomodation the possibility of future higher volatility.
+ * Secondly, the prediction intervals for the new model we have generated are notably wider than the ARMA model. This is due to the fact we have modelled a conditional variance, where its time varying nature means prediction intervals must accomodate the possibility of future higher volatility, and are hence wider then a typical ARMA model.
  
  * Thirdly, by looking at our RMSE and MAE metrics, we can see that overall the out of sample fit for the old model is actually better as the old model produces lower values for both to these metrics. While this certainly suggests the old model is preferable, given what we know about the prior model (i.e. not accounting for a unit root), we should treat such perceived preference with skepticism. The COVID-19 pandemic clearly had a massive impact on the underlying data generating process, which no covariance stationary modelling framework could effectively capture. I don't think it is reasonable to say that a certain model is "better" using empirical metrics when there are clearly major theoretical flaws underpinning its construction, as is the case with the old model.
  
