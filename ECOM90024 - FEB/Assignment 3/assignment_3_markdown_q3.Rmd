@@ -25,6 +25,10 @@ theme_set(theme_minimal())
 # library(tidyverse)
 # library(lubridate)
 # library(forecast)
+# library(urca)
+# library(tseries)
+# library(rugarch)
+# library(janitor)
 
 ```
 
@@ -32,7 +36,7 @@ theme_set(theme_minimal())
 
 <br>
 
-The file "aapl.csv" contins observations of the daily closing price of Apple from 15/05/2015 to 15/05/2019. Uing *R* you are required to do the following:
+The file "aapl.csv" contains observations of the daily closing price of Apple from 15/05/2015 to 15/05/2019. Using *R* you are required to do the following:
 
 <br>
 
@@ -121,7 +125,7 @@ summary(df_data_level)
   
   + Using our portmanteau tests below, we conclude it is not suitable to use an ARIMA process to model the conditional mean of this series.
   
-  +This is because the p-values from both our tests are both very large, meaning we cannot reject the null hypothesis of there being no autocorrelation in the time series up to 32 lags (m). This means these series are effectively white noise.
+  + This is because the p-values from both our tests are both very large (much greater than 0.05), meaning we cannot reject the null hypothesis of there being no autocorrelation in the time series up to 32 lags (m) at any reasonable significance level. This means these series are effectively white noise, and cannot be usefully modelled as an ARIMA process..
 
 
 ``` {r aii}
@@ -158,6 +162,10 @@ mean_eqn <- Arima(data$returns,
 
 
 ## c) Using your estimates from part b, compute and plot h-step ahead dpoint and 95% interval forecasts for the daily returns for h = 1, 2, ..., 10.
+
+<br>
+
+Chart 2 below charts the point estimate of our 10-step ahead forecast. For ease of viewing, we have only included observations from the beginning of 2019 onwards. The point estimate forecast is zero for all forecast period, this is because the expected mean of a white noise series is unconditionally zero unless there is a mean to the series. Our mean is zero. The prediction intervals reflect the normal distribution of the white noise error term.
 
 ```{r c}
 
@@ -210,9 +218,9 @@ mean_eqn_fc
 
 ## d) Using the method described in lecture 9, test for the presence of ARCH effects in the residuals obtained from the conditional mean estimated in part (b).
 
- * Before estimating, its worth noting that Chart 3 indicates residuals with high degrees of volatility clustering. This just reflects the returns series as we did not actually modell the mean with an ARIMA(0,0,0).
+ * Before estimating, its worth noting that Chart 3 indicates residuals with high degrees of volatility clustering. This just reflects the returns series as we did not actually model the mean with an ARIMA(0,0,0).
 
- * Chart 4 and Chart 5 show the ACF and PACF respectively of the squared residuals from our conditional mean equation, both of which show many significant lags, telling us that ARCH effects are present.
+ * Chart 4 and Chart 5 show the ACF and PACF respectively of the squared residuals from our conditional mean equation, both of which show many significant lags, suggesting that ARCH effects are present.
  
  * This is confirmed by the portmanteau tests below on the squared residuals from our conditional mean equation, which confirm these series are not white noise, and that there is indeed dependence in the squared residuals of our conditional mean equation. This justifies us pursuing the estimation of an ARCH/GARCH model.
 
@@ -242,15 +250,17 @@ Box.test(mean_eqn_res_sq, type = "Ljung-Box", l = m)
 
 ## e) Estimate an appropriate ARCH/GARCH model for the innovations. Verify that your specification is adequate.
 
- * From Chart 4 above, it can be seen there are significant ACF lags up to lag 18. Therefore, we will test for model with ARCH terms up to order 18.
+ * From Chart 4 above, it can be seen there are significant ACF lags up to lag 18. Therefore, we will test for model with ARCH terms up to order 18. Note, estimating these models produces many pages of output. I have reduced the amount of this output for the pdf for brevity.
  
   + AIC and BIC disagree on which model to use (ARCH(12) and ARCH(8)) respectively. We will go with the more parsimonious ARCH(8) model.
   
-  + After estimating the ARCH(8) model we rexamine the residuals and note the residuals now look much more like white noise (Chart 6). This is confirmed by our portmanteau tests below in the squared standardised squared residuals. Given their large p-values, we can confirm the residuals from this model are now white noise.
+  + After estimating the ARCH(8) model we re-examine the residuals and note the residuals now look much more like white noise (Chart 6). This is confirmed by our portmanteau tests below in the squared standardised squared residuals. Given their large p-values (>0.05), we can confirm the residuals from this model are now white noise.
   
   + Therefore, we conclude this ARCH(8) model successfully accounts for the ARCH effects in this return series.
   
-  + However, we also test to see if a more parsimonious GARCH(1,1) sufficiently arrives at the same solution and instead prefer this specification: the residuals also look very similar and like white noise  (Chart 8) and the portmanteau tests also confirm this is the case for the same reason as above.
+  + However, we also test to see if a more parsimonious GARCH(1,1) sufficiently arrives at the same solution and instead prefer this specification: the residuals also look very similar and like white noise  (Chart 8) and the portmanteau tests also confirm this is the case for the same reason as above: large p-values which tell us these residuals are white noise.
+  
+  + Because the GARCH(1,1) achieves the same outcome as the ARCH(8) more parsimoniously, we adopt this model instead as our preferred model.
 
 ```{r e}
 
@@ -326,14 +336,6 @@ Box.test(garchmod.ressq, lag = m, type = "Ljung-Box")
 # The GARCH(1,1) model fails to remove ARCH effects from the squared residuals!
 
 
-```
-
-
-## f) Using conditional varince forecasts from your ARCH/GARCH model, compute and plot h-step ahead point and 95% interval forecasts for the daily returns for h = 1, 2, ..., 10.
-
-```{r f}
-
-
 ################################# CREATING FINAL MODEL #########################
 
 final_model <- ugarchspec(
@@ -345,6 +347,15 @@ final_model <- ugarchspec(
   distribution.model = "norm"
   
 )
+
+
+```
+
+
+## f) Using conditional varince forecasts from your ARCH/GARCH model, compute and plot h-step ahead point and 95% interval forecasts for the daily returns for h = 1, 2, ..., 10.
+
+```{r f}
+
 
 ############################# FORECASTING VALUES ###############################
 

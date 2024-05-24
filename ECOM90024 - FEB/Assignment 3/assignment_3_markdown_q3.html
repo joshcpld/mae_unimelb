@@ -361,13 +361,17 @@ display: none;
  
 # library(tidyverse)
 # library(lubridate)
-# library(forecast)</code></pre>
+# library(forecast)
+# library(urca)
+# library(tseries)
+# library(rugarch)
+# library(janitor)</code></pre>
 <div id="question-3" class="section level1">
 <h1>Question 3</h1>
 <p><br></p>
-<p>The file “aapl.csv” contins observations of the daily closing price
-of Apple from 15/05/2015 to 15/05/2019. Uing <em>R</em> you are required
-to do the following:</p>
+<p>The file “aapl.csv” contains observations of the daily closing price
+of Apple from 15/05/2015 to 15/05/2019. Using <em>R</em> you are
+required to do the following:</p>
 <p><br></p>
 <div id="a-generate-the-daily-returns-of-apples-stock-price-as-the-log-difference-of-the-daily-closing-price.-plot-the-data-and-provide-a-brief-description-of-the-observed-time-series." class="section level2">
 <h2>a) Generate the daily returns of Apple’s stock price as the log
@@ -495,13 +499,16 @@ summary(df_data_level)</code></pre>
 specifying any mean equation with an ARIMA model. If they are white
 noise, this series cannot be usefully modelled using such a process.</p>
 <ul>
-<li>Using our portmanteau tests below, we conclude it is not suitable to
-use an ARIMA process to model the conditional mean of this series.</li>
-</ul>
-<p>+This is because the p-values from both our tests are both very
-large, meaning we cannot reject the null hypothesis of there being no
-autocorrelation in the time series up to 32 lags (m). This means these
-series are effectively white noise.</p></li>
+<li><p>Using our portmanteau tests below, we conclude it is not suitable
+to use an ARIMA process to model the conditional mean of this
+series.</p></li>
+<li><p>This is because the p-values from both our tests are both very
+large (much greater than 0.05), meaning we cannot reject the null
+hypothesis of there being no autocorrelation in the time series up to 32
+lags (m) at any reasonable significance level. This means these series
+are effectively white noise, and cannot be usefully modelled as an ARIMA
+process..</p></li>
+</ul></li>
 </ul>
 <pre class="r"><code>m &lt;- ceiling((sqrt(length(data$returns))))
 
@@ -536,6 +543,14 @@ equation as an ARIMA(0,0,0)</li>
 <h2>c) Using your estimates from part b, compute and plot h-step ahead
 dpoint and 95% interval forecasts for the daily returns for h = 1, 2, …,
 10.</h2>
+<p><br></p>
+<p>Chart 2 below charts the point estimate of our 10-step ahead
+forecast. For ease of viewing, we have only included observations from
+the beginning of 2019 onwards. The point estimate forecast is zero for
+all forecast period, this is because the expected mean of a white noise
+series is unconditionally zero unless there is a mean to the series. Our
+mean is zero. The prediction intervals reflect the normal distribution
+of the white noise error term.</p>
 <pre class="r"><code>################################# FORECASTING VALUES ###########################
 
 mean_fc &lt;- forecast(mean_eqn, h = 10) %&gt;% 
@@ -597,11 +612,11 @@ estimated in part (b).</h2>
 <ul>
 <li><p>Before estimating, its worth noting that Chart 3 indicates
 residuals with high degrees of volatility clustering. This just reflects
-the returns series as we did not actually modell the mean with an
+the returns series as we did not actually model the mean with an
 ARIMA(0,0,0).</p></li>
 <li><p>Chart 4 and Chart 5 show the ACF and PACF respectively of the
 squared residuals from our conditional mean equation, both of which show
-many significant lags, telling us that ARCH effects are
+many significant lags, suggesting that ARCH effects are
 present.</p></li>
 <li><p>This is confirmed by the portmanteau tests below on the squared
 residuals from our conditional mean equation, which confirm these series
@@ -641,22 +656,28 @@ Verify that your specification is adequate.</h2>
 <ul>
 <li><p>From Chart 4 above, it can be seen there are significant ACF lags
 up to lag 18. Therefore, we will test for model with ARCH terms up to
-order 18.</p></li>
+order 18. Note, estimating these models produces many pages of output. I
+have reduced the amount of this output for the pdf for brevity.</p></li>
 <li><p>AIC and BIC disagree on which model to use (ARCH(12) and ARCH(8))
 respectively. We will go with the more parsimonious ARCH(8)
 model.</p></li>
-<li><p>After estimating the ARCH(8) model we rexamine the residuals and
-note the residuals now look much more like white noise (Chart 6). This
-is confirmed by our portmanteau tests below in the squared standardised
-squared residuals. Given their large p-values, we can confirm the
-residuals from this model are now white noise.</p></li>
+<li><p>After estimating the ARCH(8) model we re-examine the residuals
+and note the residuals now look much more like white noise (Chart 6).
+This is confirmed by our portmanteau tests below in the squared
+standardised squared residuals. Given their large p-values (&gt;0.05),
+we can confirm the residuals from this model are now white
+noise.</p></li>
 <li><p>Therefore, we conclude this ARCH(8) model successfully accounts
 for the ARCH effects in this return series.</p></li>
 <li><p>However, we also test to see if a more parsimonious GARCH(1,1)
 sufficiently arrives at the same solution and instead prefer this
 specification: the residuals also look very similar and like white noise
 (Chart 8) and the portmanteau tests also confirm this is the case for
-the same reason as above.</p></li>
+the same reason as above: large p-values which tell us these residuals
+are white noise.</p></li>
+<li><p>Because the GARCH(1,1) achieves the same outcome as the ARCH(8)
+more parsimoniously, we adopt this model instead as our preferred
+model.</p></li>
 </ul>
 <pre class="r"><code>########################### ESTIMATING ARCH MODELS #############################
 
@@ -2311,13 +2332,10 @@ plot(garchmod.res, col = &quot;red&quot;, main = &quot;Chart 8: Standardised Res
 ## 
 ## data:  garchmod.ressq
 ## X-squared = 11.896, df = 32, p-value = 0.9995</code></pre>
-<pre class="r"><code># The GARCH(1,1) model fails to remove ARCH effects from the squared residuals!</code></pre>
-</div>
-<div id="f-using-conditional-varince-forecasts-from-your-archgarch-model-compute-and-plot-h-step-ahead-point-and-95-interval-forecasts-for-the-daily-returns-for-h-1-2-10." class="section level2">
-<h2>f) Using conditional varince forecasts from your ARCH/GARCH model,
-compute and plot h-step ahead point and 95% interval forecasts for the
-daily returns for h = 1, 2, …, 10.</h2>
-<pre class="r"><code>################################# CREATING FINAL MODEL #########################
+<pre class="r"><code># The GARCH(1,1) model fails to remove ARCH effects from the squared residuals!
+
+
+################################# CREATING FINAL MODEL #########################
 
 final_model &lt;- ugarchspec(
   
@@ -2327,9 +2345,13 @@ final_model &lt;- ugarchspec(
   
   distribution.model = &quot;norm&quot;
   
-)
-
-############################# FORECASTING VALUES ###############################
+)</code></pre>
+</div>
+<div id="f-using-conditional-varince-forecasts-from-your-archgarch-model-compute-and-plot-h-step-ahead-point-and-95-interval-forecasts-for-the-daily-returns-for-h-1-2-10." class="section level2">
+<h2>f) Using conditional varince forecasts from your ARCH/GARCH model,
+compute and plot h-step ahead point and 95% interval forecasts for the
+daily returns for h = 1, 2, …, 10.</h2>
+<pre class="r"><code>############################# FORECASTING VALUES ###############################
 
 
 data_fc &lt;- data_fc %&gt;% 
@@ -2412,14 +2434,14 @@ that in the GARCH model forecast, the intervals are sloping downwards
 whereas they are constant for the mean equation forecast.</p></li>
 <li><p>The reason mean equation forecast has constant variance is
 because that is a requirement for effecively modelling using an ARIMA
-model: variance must be constant. Therefore, by definition, these models
-are unable to show any time variance.</p></li>
+model: variance must be constant and unconditional. Therefore, by
+definition, these models are unable to show any time variance.</p></li>
 <li><p>In comparison, the reason the variance is not constant is because
 the objective of GARCH models is to model conditional (i.e. time
 varying) variance. Specifically, it slopes downwards due to the nature
 of how volatility is modelled. That is, GARCH models incorporate mean
 reversion of volatility, which means that while volatility can spike in
-the short term due ot shocks, it is always expected to revert to a
+the short term due to shocks, it is always expected to revert to a
 long-run average over time. Furthermore, given our time series is
 stationary, therefore this conditional variance will always revert back
 to its unconditional variance following the unwinding of

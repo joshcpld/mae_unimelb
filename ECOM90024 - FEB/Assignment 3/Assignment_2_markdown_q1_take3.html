@@ -441,8 +441,9 @@ ADF test, as we’ve already accounted for the trend and drift term within
 the price level.</p></li>
 <li><p>Using 13 lags we conduct the ADF test on the level of our
 cyclical series and extract a test statistic of -1.1345. This is larger
-than all of the relevant critical values, and therefore fail to reject
-the null hypothesis of there being a unit root in this series.</p></li>
+than all of the relevant critical values. Therefore fail to reject the
+null hypothesis of there being a unit root in this series, meaning we
+must difference the data and test again.</p></li>
 <li><p>Using 17 lags, we conduct the ADF test on the differenced
 cyclical series and extract a test statistic of -2.716. This is larger
 than all of the given critical values in our test. Therefore reject the
@@ -632,17 +633,18 @@ m</code></pre>
 <p><br></p>
 <p>We then need to generate the ACF and PACF of our cyclical series to
 get a sense of their dependence. When doing this, we need to use the
-differenced series as it is I(1)</p>
+differenced series as it is I(1), and it is the differenced data we are
+creating a time series model for.</p>
 <ul>
 <li><p>Chart 3 shows the sample autocorrelation function (ACF) for the
 differenced demeaned US home price index for the 1st to the 20th lag. It
-shows there are significant lags up to lag 15.</p></li>
+shows there are significant lags up to lag 18.</p></li>
 <li><p>Chart 4 shows the sample partial autocorrelation function (PACF)
 for the differenced demeaned US home price index from the 1st to the
 20th lag.There are significant lags up until lag 13.</p></li>
 <li><p>Based of this information, this tells us that when choosing an
 ARIMA(p,d,q), we should search for a model with a p parameter up to
-order 15. We need a minimum value of 1 because we need to account for
+order 18. We need a minimum value of 1 because we need to account for
 dependency in our model (ie. we know this isn’t a white noise process).
 We will search for a model with a q parameter up to 4 given it’s not
 advisable we have any more than 4 MA terms in our ARIMA model.</p></li>
@@ -691,7 +693,7 @@ aic_best_model &lt;- auto.arima(data$price_level,
                          #Parameter values
                          
                          start.p = 1,
-                         max.p = 15,
+                         max.p = 18,
                          max.d = 1,
                          max.q = 4,
                          
@@ -817,7 +819,9 @@ Box.test(mean_eqn_res_sq, type = &quot;Box-Pierce&quot;, l = m)</code></pre>
 <ul>
 <li><p>From Chart 7, we can see there are significant ACF lags in the
 squared residuals up to lag 15. Therefore, we will test for models with
-ARCH terms up to order 15.</p></li>
+ARCH terms up to order 15. Please note, estimating all of these models
+added dozens of pages to the printout for my submission. I have removed
+most of them from this pdf for brevity.</p></li>
 <li><p>Using AIC/BIC we determine our preferred model, where both
 measures give different results: ARCH(13) and ARCH(12) respectively. We
 will go with the more parsimonious ARCH(12) from the BIC.</p></li>
@@ -827,7 +831,7 @@ sufficient. We conclude it is because:</p></li>
 9)</p></li>
 <li><p>Our portmanteau tests both return large p-values (both &gt;
 0.05), meaning we cannot reject the null hypothesis the standardised
-squared residuals from this ARCH(13) model are white noise. This
+squared residuals from this ARCH(12) model are white noise. This
 confirms the ARCH effects have been dealt with in this model.</p></li>
 <li><p>However, for completeness, we check if a more parsimonious
 GARCH(1,1) sufficiently arrives at the same solution. We don’t find this
@@ -839,8 +843,9 @@ residuals. Therefore, we stay with our ARCH(13) model.</p></li>
 </ul>
 <p><br></p>
 <p>Ultimately, after all this analysis, we settle on an
-ARIMA(1,1,2)-ARCH(13) model as our preferred model for forecasting the
+ARIMA(1,1,2)-ARCH(12) model as our preferred model for forecasting the
 cyclical components of our time series.</p>
+<p><br></p>
 <pre class="r"><code>########################### ESTIMATING ARCH MODELS #############################
 
 z = 15
@@ -2321,7 +2326,9 @@ metrics.</h2>
 from our preferred model, re-integrates the data and also adds back in
 the mean term to produce our final time series point estimate and
 interval forecast. It also charts the forecast we produced in Assignment
-2 using our ARMA(13,3) model wit ha deterministic trend.</p>
+2 using our ARMA(13,3) model with a deterministic trend. Chart 10 shows
+the forecasts of both models and their intervals relative to
+actuals.</p>
 <p>Before commenting on the overall efficacy of these forecasts, first
 some observations on comparing the two forecasts:</p>
 <ul>
@@ -2334,8 +2341,9 @@ series.</p></li>
 <li><p>Secondly, the prediction intervals for the new model we have
 generated are notably wider than the ARMA model. This is due to the fact
 we have modelled a conditional variance, where its time varying nature
-means prediction intervals must accomodation the possibility of future
-higher volatility.</p></li>
+means prediction intervals must accomodate the possibility of future
+higher volatility, and are hence wider then a typical ARMA
+model.</p></li>
 <li><p>Thirdly, by looking at our RMSE and MAE metrics, we can see that
 overall the out of sample fit for the old model is actually better as
 the old model produces lower values for both to these metrics. While
