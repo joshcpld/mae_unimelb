@@ -13,7 +13,7 @@ set more off // pause more message
 
 // Change directory (folder to import data from + save data/plots/tables to)
 // Change this path to the folder for tutorial materials on your computer
-cd "D:/Career/Melbourne/2024 Semester 2/Tutoring/Week 1"
+cd"C:\Users\joshc\OneDrive\Desktop\git\mae_unimelb\2024\S2\ECOM90003 - Applied Microeconometric Modelling\Week 1\"
 
 // Create log file to save all commands ran in the session
 log using "StataLab.log", replace
@@ -40,7 +40,7 @@ log using "StataLab.log", replace
 	list in 1/10	
 	
 	sum wage 
-	sum _all, de // Summary statistics 
+	sum _all, detail // Summary statistics 
 	help summarize // Open help document
 	count if missing(wage)
 	misstable sum, all // Report on missing values
@@ -60,7 +60,7 @@ log using "StataLab.log", replace
 	tab gender, nolabel // remove label to show underlying numeric values
 
 	gen female=1 if gender==2
-	replace female=0 if gender==1
+	replace female=0 if gender==1 // if the variable has already been created need to use the replace command. i.e. replace is for editing.
 	label var female "Female dummy"
 	label define female 1"female" 0"male"
 	label values female female
