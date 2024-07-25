@@ -1,0 +1,23 @@
+---
+title: "Josh Copeland - ECOM90002 - Tutorial 1"
+output: html_document
+date: ""
+---
+
+```{r libraries, include=FALSE}
+library(tidyverse)
+library(readxl)
+library(lubridate)
+library(janitor)
+
+theme_set(theme_minimal())
+```
+
+
+
+# Question 1
+
+```{q1}
+
+```
+
