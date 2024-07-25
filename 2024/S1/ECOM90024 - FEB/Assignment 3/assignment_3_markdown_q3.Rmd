@@ -1,0 +1,439 @@
+---
+title: "ECOM90024 - Assignment 3 - Question 3"
+author: "Josh Copeland"
+date: "2024-05-22"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+library(lubridate)
+library(forecast)
+library(urca)
+library(tseries)
+library(rugarch)
+library(janitor)
+
+theme_set(theme_minimal())
+
+```
+```{r setup_text}
+
+# Packages used for this assignment
+ 
+# library(tidyverse)
+# library(lubridate)
+# library(forecast)
+# library(urca)
+# library(tseries)
+# library(rugarch)
+# library(janitor)
+
+```
+
+# Question 3 
+
+<br>
+
+The file "aapl.csv" contains observations of the daily closing price of Apple from 15/05/2015 to 15/05/2019. Using *R* you are required to do the following:
+
+<br>
+
+
+## a) Generate the daily returns of Apple's stock price as the log difference of the daily closing price. Plot the data and provide a brief description of the observed time series.
+
+<br>
+
+Chart 1 shows a chart of Apple's daily returns from 2015-05-15 to 2019-05-14. The mean of this series looks to be constant over time, but there is clear evidence of volatility clustering throuhgout this period. Notably, this occurs in late 2015, as well as early and late 2018 to call out the biggest examples (but there are other smaller episode throughout this history).
+
+This volatility clustering suggests this time series has a conditional variance, where a (G)ARCH specification would likely aid in modelling these returns. However, more analysis is required to confirm this.
+
+<br>
+
+```{r a}
+
+################################# IMPORTING DATA ###############################
+
+data <- read_csv("aapl.csv") %>% 
+  select(date, price = aapl) %>% 
+  mutate(
+    
+    date = dmy(date),
+    returns = (log(price) - lag(log(price))) * 100
+    
+    ) %>% 
+  na.omit()
+
+
+
+################################# CHARTING DATA ###############################
+
+ggplot(data, aes(date, returns)) + 
+  geom_line() + 
+  ggtitle("Chart 1: Daily Apple log returns from 2015-05-15 to 2019-05-14")+
+  ylab("Returns (%)") +
+  xlab("Date")
+
+
+```
+
+<br>
+
+## b) Using the methodology outlined in previous lectures, specify and estimate an appropriate and parsimonious model for the conditional mean of the daily returns. Do not include any deterministic trend or seasonal dummies in your specification.
+
+* As we have been instructed to not include any deterministic components to our model, we begin by testing for a unit root in this series.
+
+  + We use the "none" option for our ADF test because there is no drift to this series: it centres at zero.
+  
+  + After determining the optimal number of lags for our regression (0), we complete the ADF test on the level. The test statistic is generates is equal to -31.17, which is much greater than any of the listed critical values. Therefore, we reject the null hypothesis of this series having a unit root and conclude it is I(0).
+
+
+```{r b}
+
+#################### SPECIFYING THE NUMBER OF MAX ADF LAGS #####################
+
+kmax <- ceiling(12*(length(data$price_level)/100)^(1/4))
+
+############################## ADF TEST ON LEVEL SERIES ########################
+
+
+for (i in 1:(kmax-1)){
+
+  k = kmax+1-i   
+
+  df_data_level = ur.df(data$returns, type = "none", lags = k)
+
+  tstat = df_data_level@testreg$coefficients[k+1,3]
+
+  if(abs(tstat) >= 1.6){break}
+
+}
+
+k
+
+# SUMMARY OF ADF TEST
+
+summary(df_data_level)
+
+# Conclusion: The test statistic is very large (~-31). Therefore, we can reject the null hypothesis at any reasonable significance level and conclude this series is I(O). 
+
+```
+<br>
+
+* Next we need to confirm our series is not white noise before specifying any mean equation with an ARIMA model. If they are white noise, this series cannot be usefully modelled using such a process.
+  
+  + Using our portmanteau tests below, we conclude it is not suitable to use an ARIMA process to model the conditional mean of this series.
+  
+  + This is because the p-values from both our tests are both very large (much greater than 0.05), meaning we cannot reject the null hypothesis of there being no autocorrelation in the time series up to 32 lags (m) at any reasonable significance level. This means these series are effectively white noise, and cannot be usefully modelled as an ARIMA process..
+
+
+``` {r aii}
+
+m <- ceiling((sqrt(length(data$returns))))
+
+m
+
+Box.test(data$returns, lag = m, type = "Box-Pierce")
+
+Box.test(data$returns, lag = m, type = "Ljung-Box")
+
+
+```
+
+<br>
+
+
+ * Because we've concluded these series are effectively white noise, we can skip generating the the ACF and PACF to determine its dependence structure (there is none). From this we generate the conditional mean equation as an ARIMA(0,0,0)
+ 
+
+``` {r aiii}
+
+mean_eqn <- Arima(data$returns,
+                     order = c(0,0,0),
+                     include.mean = FALSE,
+                     method = "CSS-ML")
+
+
+
+```
+
+<br>
+
+
+## c) Using your estimates from part b, compute and plot h-step ahead dpoint and 95% interval forecasts for the daily returns for h = 1, 2, ..., 10.
+
+<br>
+
+Chart 2 below charts the point estimate of our 10-step ahead forecast. For ease of viewing, we have only included observations from the beginning of 2019 onwards. The point estimate forecast is zero for all forecast period, this is because the expected mean of a white noise series is unconditionally zero unless there is a mean to the series. Our mean is zero. The prediction intervals reflect the normal distribution of the white noise error term.
+
+```{r c}
+
+################################# FORECASTING VALUES ###########################
+
+mean_fc <- forecast(mean_eqn, h = 10) %>% 
+   data.frame() %>% 
+  select(point_estimate = Point.Forecast, low_prediction_interval = Lo.95, high_prediction_interval = Hi.95)
+
+############################ CREATING DATAFRAME FOR FORECASTING ################
+
+data_fc <- data.frame(date = seq(from = max(data$date) + days(1), by = "days", length.out = 10)) %>% 
+  cbind(mean_fc)
+
+############################ COMBINING TOGETHER FOR CHART ######################
+
+data_final <- data %>% 
+  full_join(data_fc, by = "date") %>% 
+  filter(date >= "2019-01-01")
+
+
+################################### CHART ######################################
+
+
+mean_eqn_fc <- ggplot(data_final, aes(x = date)) +
+  geom_line(aes(y = returns)) + 
+  geom_line(aes(y = point_estimate, colour = "Point estimate")) + 
+  geom_line(aes(y = high_prediction_interval, colour = "Prediction interval")) + 
+  geom_line(aes(y = low_prediction_interval, colour = "Prediction interval")) + 
+  
+  
+    scale_colour_manual(name = "Forecast", values = c("Point estimate" = "red", "Prediction interval" = "blue")) + 
+  
+    ggtitle("Chart 2: Daily Apple log returns from 2019-01-01 with forecast")+
+  ylab("Returns (%)") +
+  xlab("Date") + 
+      theme(plot.title = element_text(size = 10),
+        plot.caption = element_text(hjust = 0),
+        legend.position = c(0.1, 0.4),
+        legend.justification = c(0, 1))
+
+mean_eqn_fc
+
+
+
+
+
+```
+
+
+## d) Using the method described in lecture 9, test for the presence of ARCH effects in the residuals obtained from the conditional mean estimated in part (b).
+
+ * Before estimating, its worth noting that Chart 3 indicates residuals with high degrees of volatility clustering. This just reflects the returns series as we did not actually model the mean with an ARIMA(0,0,0).
+
+ * Chart 4 and Chart 5 show the ACF and PACF respectively of the squared residuals from our conditional mean equation, both of which show many significant lags, suggesting that ARCH effects are present.
+ 
+ * This is confirmed by the portmanteau tests below on the squared residuals from our conditional mean equation, which confirm these series are not white noise, and that there is indeed dependence in the squared residuals of our conditional mean equation. This justifies us pursuing the estimation of an ARCH/GARCH model.
+
+
+```{r d}
+
+
+mean_eqn_res <- mean_eqn$resid
+
+plot(mean_eqn_res, main = "Chart 3: Residuals from ARIMA(0,0,0) model")
+
+mean_eqn_res_sq <- mean_eqn_res^2
+
+acf.res <- acf(mean_eqn_res_sq, plot = FALSE)
+pacf.res <- pacf(mean_eqn_res_sq, plot = FALSE)
+
+plot(acf.res[1:20], main = "Chart 4: ACF of squared residuals from ARIMA(0,0,0) model")
+
+plot(pacf.res[1:20], main = "Chart 5: PACF of squared residuals from ARIMA(0,0,0) model")
+
+
+Box.test(mean_eqn_res_sq, type = "Box-Pierce", l = m)
+Box.test(mean_eqn_res_sq, type = "Ljung-Box", l = m)
+
+```
+
+
+## e) Estimate an appropriate ARCH/GARCH model for the innovations. Verify that your specification is adequate.
+
+ * From Chart 4 above, it can be seen there are significant ACF lags up to lag 18. Therefore, we will test for model with ARCH terms up to order 18. Note, estimating these models produces many pages of output. I have reduced the amount of this output for the pdf for brevity.
+ 
+  + AIC and BIC disagree on which model to use (ARCH(12) and ARCH(8)) respectively. We will go with the more parsimonious ARCH(8) model.
+  
+  + After estimating the ARCH(8) model we re-examine the residuals and note the residuals now look much more like white noise (Chart 6). This is confirmed by our portmanteau tests below in the squared standardised squared residuals. Given their large p-values (>0.05), we can confirm the residuals from this model are now white noise.
+  
+  + Therefore, we conclude this ARCH(8) model successfully accounts for the ARCH effects in this return series.
+  
+  + However, we also test to see if a more parsimonious GARCH(1,1) sufficiently arrives at the same solution and instead prefer this specification: the residuals also look very similar and like white noise  (Chart 8) and the portmanteau tests also confirm this is the case for the same reason as above: large p-values which tell us these residuals are white noise.
+  
+  + Because the GARCH(1,1) achieves the same outcome as the ARCH(8) more parsimoniously, we adopt this model instead as our preferred model.
+
+```{r e}
+
+########################### ESTIMATING ARCH MODELS #############################
+
+z = 18
+
+prefix.arch <- "arch"
+suffix.arch <- seq(1,z)
+
+arch.label <- paste(prefix.arch, suffix.arch, sep = "" )
+
+arch.info <- data.frame(row.names = arch.label, matrix(NA,z,2))
+
+colnames(arch.info) <- c("aic","bic") 
+
+T <- length(mean_eqn_res)
+
+for(i in 1:z){
+archmod <- garch(mean_eqn_res, order = c(0,i))
+arch.info[i,1] <- AIC(archmod)
+arch.info[i,2] <- AIC(archmod, k = log(T-i-1))
+}
+
+akaike.choice <- rownames(arch.info)[which.min(arch.info[,1])]
+bayes.choice <- rownames(arch.info)[which.min(arch.info[,2])]
+
+akaike.choice
+bayes.choice
+
+
+########################## REXAMINING RESIDUALS ################################
+
+
+archmod <- garch(mean_eqn_res, order = c(0,8))
+
+archmod.res <- archmod$residuals
+
+archmod.res <- na.omit(archmod.res)
+
+plot(archmod.res, col = "red", main = "Chart 6: Standardised Residuals from ARCH(8) Equation", type = "l")
+
+archmod.ressq <- archmod.res^2
+
+plot(archmod.ressq, col = "darkorchid", main = "Chart 7: Squared Standardised Residuals from ARCH(8) Equation", type = "l")
+
+######################## VERIFYING IF ARCH EFFECTS ARE GONE ####################
+
+Box.test(archmod.ressq, lag = m, type = "Box-Pierce")
+
+Box.test(archmod.ressq, lag = m, type = "Ljung-Box")
+
+
+
+########### TESTING IF A GARCH(1,1) MODEL GIVES SIMILAR RESULTS ################
+
+garchmod <- garch(mean_eqn_res, order = c(1,1))
+
+garchmod.res <- garchmod$residuals
+
+garchmod.res <- na.omit(garchmod.res)
+
+garchmod.ressq <- garchmod.res^2
+
+plot(garchmod.res, col = "red", main = "Chart 8: Standardised Residuals from GARCH(1,1) Equation", type = "l")
+
+plot(garchmod.ressq, col ="darkorchid", main = "Chart 9: Squared Standardised Residuals from GARCH(1,1) Equation", type = "l")
+
+Box.test(garchmod.ressq, lag = m, type = "Box-Pierce")
+
+Box.test(garchmod.ressq, lag = m, type = "Ljung-Box")
+
+# The GARCH(1,1) model fails to remove ARCH effects from the squared residuals!
+
+
+################################# CREATING FINAL MODEL #########################
+
+final_model <- ugarchspec(
+  
+  variance.model = list(model ="sGARCH", garchOrder = c(1,1)),
+  
+  mean.model = list(armaOrder = c(0,0), include.mean = TRUE),
+  
+  distribution.model = "norm"
+  
+)
+
+
+```
+
+
+## f) Using conditional varince forecasts from your ARCH/GARCH model, compute and plot h-step ahead point and 95% interval forecasts for the daily returns for h = 1, 2, ..., 10.
+
+```{r f}
+
+
+############################# FORECASTING VALUES ###############################
+
+
+data_fc <- data_fc %>% 
+  select(date)
+
+final_model_forecast_fit <- ugarchfit(spec = final_model, data = data$returns)
+
+final_model_forecast <- ugarchforecast(final_model_forecast_fit, n.ahead = 10)
+
+
+
+############################## EXTRACTING MODEL OUTPUTS ########################
+
+
+cond_mean_forecast <- data.frame(final_model_forecast@forecast$seriesFor) %>%  clean_names() %>% 
+  select(cond_mean = x1972_10_03)
+  
+cond_var_forecast <- data.frame(final_model_forecast@forecast$sigmaFor) %>% 
+  clean_names() %>% 
+  select(cond_var = x1972_10_03) %>%
+    mutate(upper_interval = cond_var * 1.96) %>% 
+  mutate(lower_interval = cond_var * -1.96) %>% 
+  select(upper_interval, lower_interval)
+ 
+
+garch_forecast <- cond_mean_forecast %>% 
+  cbind(cond_var_forecast) 
+
+
+######################### COMBINING INTO FORECAST FOR PLOT #####################
+
+data_fc <- data_fc %>% 
+  cbind(garch_forecast)
+
+
+data_final_garch <- data %>% 
+  full_join(data_fc, by = "date") %>% 
+  filter(date >= "2019-01-01")
+
+
+################################## CHARTING ####################################
+
+garch_fc <- ggplot(data_final_garch, aes(x = date)) +
+  geom_line(aes(y = returns)) + 
+  geom_line(aes(y = cond_mean, colour = "Point estimate")) + 
+  geom_line(aes(y = upper_interval, colour = "Prediction interval")) + 
+  geom_line(aes(y = lower_interval, colour = "Prediction interval")) + 
+  
+  
+    scale_colour_manual(name = "Forecast", values = c("Point estimate" = "red", "Prediction interval" = "blue")) + 
+  
+    ggtitle("Chart 9: Daily Apple log returns from 2019-01-01 with GARCH forecast")+
+  ylab("Returns (%)") +
+  xlab("Date") + 
+      theme(plot.title = element_text(size = 10),
+        plot.caption = element_text(hjust = 0),
+        legend.position = c(0.1, 0.4),
+        legend.justification = c(0, 1))
+
+garch_fc
+
+```
+
+## g) Compare the forecast intervals from part (c) with those from part (f). Do you observe any difference?
+
+* Chart 2 and Chart 9 have been replicated below for ease of refernce.
+
+  + The key difference between the forecast intervals between them is that in the GARCH model forecast, the intervals are sloping downwards whereas they are constant for the mean equation forecast.
+  
+  + The reason mean equation forecast has constant variance is because that is a requirement for effecively modelling using an ARIMA model: variance must be constant and unconditional. Therefore, by definition, these models are unable to show any time variance.
+  
+  + In comparison, the reason the variance is not constant is because the objective of GARCH models is to model conditional (i.e. time varying) variance. Specifically, it slopes downwards due to the nature of how volatility is modelled. That is, GARCH models incorporate mean reversion of volatility, which means that while volatility can spike in the short term due to shocks, it is always expected to revert to a long-run average over time. Furthermore, given our time series is stationary, therefore this conditional variance will always revert back to its unconditional variance following the unwinding of shocks.
+
+```{r g}
+
+mean_eqn_fc
+
+garch_fc
+```
