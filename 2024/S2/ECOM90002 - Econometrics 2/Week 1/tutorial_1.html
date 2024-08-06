@@ -355,7 +355,30 @@ display: none;
 
 <div id="question-1" class="section level1">
 <h1>Question 1</h1>
-<pre class="q1"><code></code></pre>
+<pre class="r"><code>data &lt;- read_csv(&quot;ChocVsNobels-1.csv&quot;)</code></pre>
+<pre><code>## Rows: 21 Columns: 6
+## ── Column specification ────────────────────────────────────────────────────────
+## Delimiter: &quot;,&quot;
+## chr (1): Country
+## dbl (5): ChocPerCap, Pop, Nobels, GDP, GDPPerCap
+## 
+## ℹ Use `spec()` to retrieve the full column specification for this data.
+## ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.</code></pre>
+<pre class="r"><code>data</code></pre>
+<pre><code>## # A tibble: 21 × 6
+##    Country        ChocPerCap   Pop Nobels     GDP GDPPerCap
+##    &lt;chr&gt;               &lt;dbl&gt; &lt;dbl&gt;  &lt;dbl&gt;   &lt;dbl&gt;     &lt;dbl&gt;
+##  1 Switzerland          11.9   7.9  30.1   468770    59338.
+##  2 Ireland               9.9   4.6  17.1   224893    48890.
+##  3 United Kingdom        9.5  62.7  19.3  2565070    40910.
+##  4 Austria               8.8   8.4  24.6   394485    46962.
+##  5 Belgium               8.3  11     8.85  477949    43450.
+##  6 Germany               8.2  81.8  13.0  3704911    45292.
+##  7 Norway                8     4.9  24.9   333131    67986.
+##  8 Denmark               7.5   5.6  24.7   253309    45234.
+##  9 Canada                6.4  34.5   6.4  1565813    45386.
+## 10 France                6.3  65.4   9.47 2571970    39327.
+## # ℹ 11 more rows</code></pre>
 </div>
 
 

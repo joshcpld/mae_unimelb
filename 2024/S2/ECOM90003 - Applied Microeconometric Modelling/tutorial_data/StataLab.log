@@ -1,0 +1,122 @@
+------------------------------------------
+      name:  <unnamed>
+       log:  C:\Users\joshc\OneDrive\Deskt
+> op\git\mae_unimelb\2024\S2\ECOM90003 - A
+> pplied Microeconometric Modelling\tutori
+> al_data\StataLab.log
+  log type:  text
+ opened on:   1 Aug 2024, 12:41:29
+
+. 
+. 
+. * Import Data
+. 
+. use "~/beauty.dta", clear
+file C:\Users\joshc/beauty.dta not found
+r(601);
+
+end of do-file
+
+r(601);
+
+. do "C:\Users\joshc\AppData\Local\Temp\ST
+> D14cc_000002.tmp"
+
+. 
+. use beauty, clear
+
+.  
+. 
+end of do-file
+
+. do "C:\Users\joshc\AppData\Local\Temp\ST
+> D14cc_000003.tmp"
+
+. ****************************************
+> ****************************************
+. ************** ECOM90003 - Applied Micro
+> econometric Modelling  *****************
+. **************************** Tutorial: W
+> eek 2 **********************************
+. ****************************************
+> ****************************************
+. 
+. 
+. 
+. ****************************************
+> ****************************************
+. ******************************* SET-UP *
+> ****************************************
+. ****************************************
+> ****************************************
+. 
+. clear // clear all data from memory
+
+. set more off // pause more message 
+
+.   
+. cd "C:\Users\joshc\OneDrive\Desktop\git\
+> mae_unimelb\2024\S2\ECOM90003 - Applied 
+> Microeconometric Modelling\tutorial_data
+> \"
+C:\Users\joshc\OneDrive\Desktop\git\mae_un
+> imelb\2024\S2\ECOM90003 - Applied Microe
+> conometric Modelling\tutorial_data
+
+. 
+. log using "week2.log", replace
+log file already open
+r(604);
+
+end of do-file
+
+r(604);
+
+. do "C:\Users\joshc\AppData\Local\Temp\STD14cc_000004.tmp"
+
+. ***********************************************************
+> *********************
+. ************** ECOM90003 - Applied Microeconometric Modelli
+> ng  *****************
+. **************************** Tutorial: Week 2 *************
+> *********************
+. ***********************************************************
+> *********************
+. 
+. 
+. 
+. ***********************************************************
+> *********************
+. ******************************* SET-UP ********************
+> *********************
+. ***********************************************************
+> *********************
+. 
+. clear // clear all data from memory
+
+. set more off // pause more message 
+
+.   
+. cd "C:\Users\joshc\OneDrive\Desktop\git\mae_unimelb\2024\S2
+> \ECOM90003 - Applied Microeconometric Modelling\tutorial_da
+> ta\"
+C:\Users\joshc\OneDrive\Desktop\git\mae_unimelb\2024\S2\ECOM9
+> 0003 - Applied Microeconometric Modelling\tutorial_data
+
+. 
+. log using "week2.log", replace
+log file already open
+r(604);
+
+end of do-file
+
+r(604);
+
+. log close
+      name:  <unnamed>
+       log:  C:\Users\joshc\OneDrive\Desktop\git\mae_unimelb\
+> 2024\S2\ECOM90003 - Applied Microeconometric Modelling\tuto
+> rial_data\StataLab.log
+  log type:  text
+ closed on:   1 Aug 2024, 12:46:32
+-------------------------------------------------------------
