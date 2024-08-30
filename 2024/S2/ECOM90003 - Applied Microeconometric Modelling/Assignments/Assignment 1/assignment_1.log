@@ -1,0 +1,35 @@
+-------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  C:\Users\joshc\OneDrive\Desktop\git\mae_unimelb\2024\S2\ECOM90003 - Applied Microeconometric Modelling\Assignments\Assig
+> nment 1\assignment_1.log
+  log type:  text
+ opened on:  30 Aug 2024, 11:38:48
+
+. 
+. * Import Data
+. 
+. use Educ_PolEcon_Data, clear
+
+. 
+. 
+. ************************************************************************
+. ********************************** Q8 **********************************
+. ************************************************************************
+. 
+. //a) 
+. 
+. levelsof year
+1986 1990 1993 1996 2000 2003
+
+. 
+. distinct v_id
+
+       |        Observations
+       |      total   distinct
+-------+----------------------
+  v_id |      59130       9855
+
+. 
+. 
+end of do-file
+
