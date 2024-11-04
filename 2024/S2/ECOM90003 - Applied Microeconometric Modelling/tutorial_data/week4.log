@@ -1,0 +1,190 @@
+------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  C:\Users\joshc\OneDrive\Desktop\git\mae_unimelb\2024\S2\ECOM90003 - App
+> lied Microeconometric Modelling\tutorial_data\week4.log
+  log type:  text
+ opened on:  15 Aug 2024, 12:53:19
+
+. 
+. * Import Data
+. 
+. use MURDER_new-1, clear
+
+. 
+. 
+. 
+. 
+. 
+. ************************************************************************
+. ********************************** Q3 **********************************
+. ************************************************************************
+. 
+. // A)
+. 
+. reg mrdrte d93 exec unem if year != 87, r
+
+Linear regression                               Number of obs     =        102
+                                                F(3, 98)          =      10.74
+                                                Prob > F          =     0.0000
+                                                R-squared         =     0.1016
+                                                Root MSE          =     10.223
+
+------------------------------------------------------------------------------
+             |               Robust
+      mrdrte | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+         d93 |  -2.067417    1.99811    -1.03   0.303    -6.032601    1.897767
+        exec |   .1277287   .1342426     0.95   0.344    -.1386714    .3941287
+        unem |   2.528892   1.107556     2.28   0.025     .3309826    4.726801
+       _cons |  -5.278005   5.386767    -0.98   0.330    -15.96787    5.411859
+------------------------------------------------------------------------------
+
+. 
+. // No, you don't estimate a deterrent effect of capital punishment. All the values
+>  are insignificant.
+. 
+. // Perhaps accounting for alpha_i using first difference model could be the soluti
+> on.
+. 
+. 
+. 
+. 
+. 
+. 
+. 
+. 
+. 
+. // B)
+. 
+. // To compute the FD estimates we need to do some data maniuplation and reshape it
+>  properly.
+. 
+. //First, you need to make sure youre data is ordered in the correct order: by stat
+> es first and then by year to make sure state obs are in order.
+. 
+. sort id year
+
+. 
+. //Now we can actually start develop our FD model.
+. 
+. 
+. // This is how state retrieves the previous observation:
+. 
+. by id: gen mrdrte_pst = mrdrte[_n-1]
+(51 missing values generated)
+
+. 
+. // Now we can generate the first_differences manually for all the variables
+. 
+. by id: gen d_mrdrte = mrdrte - mrdrte[_n-1] 
+(51 missing values generated)
+
+. 
+. by id: gen d_exec = exec - exec[_n-1] 
+(51 missing values generated)
+
+. by id: gen d_unem = unem- unem[_n-1] 
+(51 missing values generated)
+
+. 
+. 
+. reg d_mrdrte d_exec d_unem if year==93
+
+      Source |       SS           df       MS      Number of obs   =        51
+-------------+----------------------------------   F(2, 48)        =      2.96
+       Model |   6.8879023         2  3.44395115   Prob > F        =    0.0614
+    Residual |  55.8724857        48  1.16401012   R-squared       =    0.1097
+-------------+----------------------------------   Adj R-squared   =    0.0727
+       Total |   62.760388        50  1.25520776   Root MSE        =    1.0789
+
+------------------------------------------------------------------------------
+    d_mrdrte | Coefficient  Std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+      d_exec |  -.1038396   .0434139    -2.39   0.021    -.1911292     -.01655
+      d_unem |  -.0665914   .1586859    -0.42   0.677    -.3856509     .252468
+       _cons |   .4132665   .2093848     1.97   0.054    -.0077298    .8342628
+------------------------------------------------------------------------------
+
+. reg d_mrdrte d_exec d_unem if year==93, r
+
+Linear regression                               Number of obs     =         51
+                                                F(2, 48)          =      18.92
+                                                Prob > F          =     0.0000
+                                                R-squared         =     0.1097
+                                                Root MSE          =     1.0789
+
+------------------------------------------------------------------------------
+             |               Robust
+    d_mrdrte | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+      d_exec |  -.1038396   .0169995    -6.11   0.000    -.1380194   -.0696598
+      d_unem |  -.0665914     .14693    -0.45   0.652    -.3620141    .2288312
+       _cons |   .4132665   .2000057     2.07   0.044     .0111281    .8154049
+------------------------------------------------------------------------------
+
+.  
+. //From this we see that yes, increasing the number of executions does have a negat
+> ive impact on the the murder rate (-.1 beta) and is statistically significant.
+. 
+. // If there is no obvious choice for what kind of standard errors to use than choo
+> se the method which generates the largest p-value. If is still rejects the null, t
+> hen your results are unambiguous.
+. 
+. 
+. // to make your life easier, note the method for generating the differences semi-a
+> utomatically:
+. 
+.         // First, you need to make a time variable with increments of 1 (else stat
+> a will freak out and can't handle it)
+.         
+. gen time=1
+
+. 
+. replace time=2 if year==90
+(51 real changes made)
+
+. replace time=3 if year==93
+(51 real changes made)
+
+. 
+.         // Then, use the xtset command to tell Stata this is a panel data set.
+. 
+. xtset id time
+
+Panel variable: id (strongly balanced)
+ Time variable: time, 1 to 3
+         Delta: 1 unit
+
+. 
+. 
+. reg D.mrdrte D.exec D.unem if year==93, r // "D." operator tells Stata you want th
+> e first difference automatically
+
+Linear regression                               Number of obs     =         51
+                                                F(2, 48)          =      18.92
+                                                Prob > F          =     0.0000
+                                                R-squared         =     0.1097
+                                                Root MSE          =     1.0789
+
+------------------------------------------------------------------------------
+             |               Robust
+    D.mrdrte | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+        exec |
+         D1. |  -.1038396   .0169995    -6.11   0.000    -.1380194   -.0696598
+             |
+        unem |
+         D1. |  -.0665914     .14693    -0.45   0.652    -.3620141    .2288312
+             |
+       _cons |   .4132665   .2000057     2.07   0.044     .0111281    .8154049
+------------------------------------------------------------------------------
+
+. 
+. gen d2_mrdrte=D.mrdrte
+(51 missing values generated)
+
+. 
+. 
+end of do-file
+
+. exit, clear

@@ -1,0 +1,78 @@
+------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  C:\Users\joshc\OneDrive\Desktop\git\mae_unimelb\2024\S2\ECOM90003 - Applied M
+> icroeconometric Modelling\tutorial_data\week7.log
+  log type:  text
+ opened on:   5 Sep 2024, 11:51:11
+
+. 
+. * Import Data
+. 
+. use CARD-2, clear
+
+. 
+. 
+. ************************************************************************
+. ********************************** Q2 **********************************
+. ************************************************************************
+. 
+. 
+end of do-file
+
+. do "C:\Users\joshc\AppData\Local\Temp\STD79c_000001.tmp"
+
+. ************************************************************************
+. ************** ECOM90003 - Applied Microeconometric Modelling  *********
+. **************************** Tutorial: Week 7 **************************
+. ************************************************************************
+. 
+. // note: di command stands for "display" - use it to conduct arithmetic!
+. 
+. ************************************************************************
+. ******************************* SET-UP *********************************
+. ************************************************************************
+. 
+. clear // clear all data from memory
+
+. //log close
+. 
+. set more off // pause more message 
+
+.   
+. cd "C:\Users\joshc\OneDrive\Desktop\git\mae_unimelb\2024\S2\ECOM90003 - Applied Microeco
+> nometric Modelling\tutorial_data\"
+C:\Users\joshc\OneDrive\Desktop\git\mae_unimelb\2024\S2\ECOM90003 - Applied Microeconometr
+> ic Modelling\tutorial_data
+
+. 
+. log using "weekX.log", replace // if you get log file open error message, insert: "log c
+> lose" into command
+log file already open
+r(604);
+
+end of do-file
+
+r(604);
+
+. do "C:\Users\joshc\AppData\Local\Temp\STD79c_000002.tmp"
+
+. ************************************************************************
+. ************** ECOM90003 - Applied Microeconometric Modelling  *********
+. **************************** Tutorial: Week 7 **************************
+. ************************************************************************
+. 
+. // note: di command stands for "display" - use it to conduct arithmetic!
+. 
+. ************************************************************************
+. ******************************* SET-UP *********************************
+. ************************************************************************
+. 
+. clear // clear all data from memory
+
+. log close
+      name:  <unnamed>
+       log:  C:\Users\joshc\OneDrive\Desktop\git\mae_unimelb\2024\S2\ECOM90003 - Applied M
+> icroeconometric Modelling\tutorial_data\week7.log
+  log type:  text
+ closed on:   5 Sep 2024, 11:51:43
+------------------------------------------------------------------------------------------

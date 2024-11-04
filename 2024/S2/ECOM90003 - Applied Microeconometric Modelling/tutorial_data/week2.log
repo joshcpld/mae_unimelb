@@ -1,0 +1,189 @@
+-------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  C:\Users\joshc\OneDrive\Desktop\git\mae_unimelb\2024\S2\ECOM90003 - Appl
+> ied Microeconometric Modelling\tutorial_data\week2.log
+  log type:  text
+ opened on:   1 Aug 2024, 14:34:21
+
+. 
+. * Import Data
+. 
+. use beauty, clear
+
+.  
+.  
+. 
+. ************************************************************************
+. ********************************** Q2 **********************************
+. ************************************************************************
+. 
+. // a) Find the proportion of men and women classified as having above and below ave
+> rage looks. For which gender, who has more either side of average looks?
+. 
+. tab female abvavg // This gives you counts
+
+     =1 if |    =1 if looks >=4
+    female |         0          1 |     Total
+-----------+----------------------+----------
+         0 |       585        239 |       824 
+         1 |       292        144 |       436 
+-----------+----------------------+----------
+     Total |       877        383 |     1,260 
+
+. tab female abvavg, row // This gives you counts and percentages
+
++----------------+
+| Key            |
+|----------------|
+|   frequency    |
+| row percentage |
++----------------+
+
+     =1 if |    =1 if looks >=4
+    female |         0          1 |     Total
+-----------+----------------------+----------
+         0 |       585        239 |       824 
+           |     71.00      29.00 |    100.00 
+-----------+----------------------+----------
+         1 |       292        144 |       436 
+           |     66.97      33.03 |    100.00 
+-----------+----------------------+----------
+     Total |       877        383 |     1,260 
+           |     69.60      30.40 |    100.00 
+
+. 
+. * Men have a higher proportion of people above average looks compared to women
+. 
+. tab female belavg, row
+
++----------------+
+| Key            |
+|----------------|
+|   frequency    |
+| row percentage |
++----------------+
+
+     =1 if |   =1 if looks <= 2
+    female |         0          1 |     Total
+-----------+----------------------+----------
+         0 |       728         96 |       824 
+           |     88.35      11.65 |    100.00 
+-----------+----------------------+----------
+         1 |       377         59 |       436 
+           |     86.47      13.53 |    100.00 
+-----------+----------------------+----------
+     Total |     1,105        155 |     1,260 
+           |     87.70      12.30 |    100.00 
+
+. 
+. * There are more women below average looks compared to men
+. 
+. 
+. 
+. 
+. 
+. 
+. // b) Test the null hypothesis that the  population fractions of above averge looki
+> ng men and women are the same (assume the male/female variance is the same). Report
+>  the one-sided p-value that the fraction is higher for women.
+. 
+. *There are two ways to do this:
+. 
+. * 1 - two same t-test
+. 
+. ttest abvavg, by(female) // p-value == 0.07. Therefore, you can only reject the nul
+> l hypothesis of 
+
+Two-sample t test with equal variances
+------------------------------------------------------------------------------
+   Group |     Obs        Mean    Std. err.   Std. dev.   [95% conf. interval]
+---------+--------------------------------------------------------------------
+       0 |     824    .2900485    .0158179    .4540601    .2590003    .3210968
+       1 |     436    .3302752    .0225497    .4708524    .2859552    .3745952
+---------+--------------------------------------------------------------------
+Combined |   1,260    .3039683    .0129633    .4601517    .2785362    .3294003
+---------+--------------------------------------------------------------------
+    diff |           -.0402267     .027238               -.0936637    .0132103
+------------------------------------------------------------------------------
+    diff = mean(0) - mean(1)                                      t =  -1.4769
+H0: diff = 0                                     Degrees of freedom =     1258
+
+    Ha: diff < 0                 Ha: diff != 0                 Ha: diff > 0
+ Pr(T < t) = 0.0700         Pr(|T| > |t|) = 0.1400          Pr(T > t) = 0.9300
+
+. 
+. reg abvavg female
+
+      Source |       SS           df       MS      Number of obs   =     1,260
+-------------+----------------------------------   F(1, 1258)      =      2.18
+       Model |  .461393699         1  .461393699   Prob > F        =    0.1400
+    Residual |  266.118765     1,258  .211541149   R-squared       =    0.0017
+-------------+----------------------------------   Adj R-squared   =    0.0009
+       Total |  266.580159     1,259  .211739602   Root MSE        =    .45994
+
+------------------------------------------------------------------------------
+      abvavg | Coefficient  Std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+      female |   .0402267    .027238     1.48   0.140    -.0132103    .0936637
+       _cons |   .2900485   .0160226    18.10   0.000     .2586145    .3214826
+------------------------------------------------------------------------------
+
+. 
+. 
+. // CLARIFY ANSWER WITH XINRAN FOR INTERPRETATION
+. 
+. 
+. 
+. 
+. 
+. // c) Estimate the model separately for men and women and report the results in the
+>  usual from (as set out in the textbook in Chapter 4). In each case, interpret the 
+> coefficient on belavg. Explain 
+. 
+. reg lwage belavg abvavg if female == 0 // For men, being below average reduce wages
+>  by around 20%
+
+      Source |       SS           df       MS      Number of obs   =       824
+-------------+----------------------------------   F(2, 821)       =      5.53
+       Model |  3.19146186         2  1.59573093   Prob > F        =    0.0041
+    Residual |  236.969792       821  .288635556   R-squared       =    0.0133
+-------------+----------------------------------   Adj R-squared   =    0.0109
+       Total |  240.161253       823  .291811973   Root MSE        =    .53725
+
+------------------------------------------------------------------------------
+       lwage | Coefficient  Std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+      belavg |  -.1987381    .059974    -3.31   0.001    -.3164585   -.0810178
+      abvavg |  -.0439981   .0424021    -1.04   0.300    -.1272273    .0392312
+       _cons |   1.883875   .0242952    77.54   0.000     1.836187    1.931563
+------------------------------------------------------------------------------
+
+. 
+. reg lwage belavg abvavg if female == 1 // For women, being below average reduces wa
+> ges by around 1
+
+      Source |       SS           df       MS      Number of obs   =       436
+-------------+----------------------------------   F(2, 433)       =      2.30
+       Model |  1.25587193         2  .627935966   Prob > F        =    0.1018
+    Residual |  118.356592       433  .273340858   R-squared       =    0.0105
+-------------+----------------------------------   Adj R-squared   =    0.0059
+       Total |  119.612464       435  .274971181   Root MSE        =    .52282
+
+------------------------------------------------------------------------------
+       lwage | Coefficient  Std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+      belavg |  -.1376261   .0761973    -1.81   0.072    -.2873887    .0121365
+      abvavg |   .0336409   .0554196     0.61   0.544    -.0752841    .1425658
+       _cons |   1.308817   .0342511    38.21   0.000     1.241498    1.376136
+------------------------------------------------------------------------------
+
+. 
+. 
+. di (2.718^_b[belavg]-1)*100
+-12.856312
+
+. 
+. 
+end of do-file
+
+. exit, clear

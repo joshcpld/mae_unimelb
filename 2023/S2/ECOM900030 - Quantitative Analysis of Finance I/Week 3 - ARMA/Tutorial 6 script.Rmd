@@ -1,0 +1,371 @@
+---
+title: "Week 6 Tutorial"
+author: 'Josh Copeland'
+subtitle: 'ECON90033 - 2023 Semester 2 '
+date: "Completed on 10 September 2023"
+
+
+output: 
+  html_document:
+    theme: journal
+---
+
+```{r setup, include = FALSE}
+
+library(tidyverse)
+library(readxl)
+library(lubridate)
+library(forecast)
+library(knitr)
+
+```
+
+## Box-Jenkins methodology for selecting/estimating an ARMA model
+
+Box-Jenkins (1970) developed the following approach for specifying an ARMA model:
+
+* Model selection
+   + Graph {y_t}, develop the sample correlograms and perform the various tests for autocorrelction (Barlett, Box-Pierce, Ljung-Box test). Assuming stationarity holds, try to match the patterns in SACF and SPACF to select your ARMA(p,q) parameters.
+   + If the data are nonseasonal, you can rely on five rules of thumb:
+      i. If there are no significant ACF or PACF spikes, than {y_t} is white noise and not amenable to ARMA modelling.
+      ii. If ACF lags decrease slowly and linearly passing through zero become negative, or if they seem cyclical passing zero several times, {y_t} is not stationary and cannot be modeled as an ARMA process.
+      iii. If the ACF lags approach zero gradually following an exponential or damped since wave pattern, while the first SPACF gas a sudden cut-off point as lag p, {y_t} can be modeled as an AR(p) process.
+      iv. If the same is true for SPACF lags then {y_t} can be modelled as an MA(q) process
+      v. If both ACF and PACF lags converge to zero following some exponential or damped sine wave patterns beginning at lags q and p, then {y_t} might be an ARMA process. 
+
+<br>
+      
+* Estimate the ARMA models using the Arima() function in R fro mthe Forecast package
+
+<br>
+
+* Diagnostic checks
+  + If we selected more than once model in step 1, than we need to use model selection crtierion to establish which is the best model.
+  + The residuals of the preferred model should behave like white noise. If the sample size of relatively small, you should also check if the residuals are normally distributed.
+  + To check this is indeed the best model, overparameterise another model by adding an additional AR or MA term to what you're previously generated. If your original model is the best, then these additional terms should be insignificant.
+  
+  
+# Exercise 1
+
+```{r e1, echo = TRUE, include = TRUE}
+
+ts_e1 <- function(x) {
+  ts(x, start = c(1976,1), end = c(2023,1), frequency = 4)
+}
+
+ts_e1_s <- function(x) {
+  ts(x, start = c(1976,1), end = c(2019,4), frequency = 4)
+}
+
+t6e1 <- read_excel("C:/Users/joshc/Documents/2023S2/ECON90033/Tutorials/Week 6/t6e1.xlsx", sheet = "CER")
+
+
+```
+
+## a) Plot the Canadian Unemployment Rate and briefly describe the data series
+
+<br>
+
+It shows that during the sample period the Canadian employment rate probably had several cycles and a general tendency to evolve. It clearly has strong positive (first and higher order) autocorrelation. No signs of seasonality.
+
+We have excluded COVID-19 from the data given the large dip is causes.
+
+```{r e1ai, echo = TRUE, include = TRUE}
+
+e1 <- t6e1 
+
+glimpse(e1)
+
+
+e1 <- t6e1 %>% 
+  select(CER) %>% 
+  map(~ts_e1(.x)) 
+
+plot.ts(e1[["CER"]], main = "Employment rate, % Canada", col = "red", ylab = "CER")
+
+e1_s <- t6e1 %>% 
+  filter(Date <= as.Date("2019-12-01")) %>% 
+  select(CER) %>% 
+  map(~ts_e1_s(.x)) 
+
+plot.ts(e1_s[["CER"]], main = "Employment rate, % Canada", col = "red", ylab = "CER")
+
+```
+
+<br>
+
+This series seems to have a long-run upward trend, meaning it is therefore not stationary. This trend may also dominate the dynamics of the stochastic component of the data, mkaing it difficult to identify the stochastic component. If we assume its deterministic we can remove it.
+
+To do this we can regress CER_s on itself over time.The detrended CER_s series is the residuaal series from this trend regressio, which is also graphed below.
+
+<br>
+
+```{r e1aii, echo = TRUE, include = TRUE}
+
+e1_s <- t6e1 %>% 
+  filter(Date <= as.Date("2019-12-01")) %>% 
+  select(CER) %>% 
+  mutate(t = row_number()) %>% 
+  map(~ts_e1_s(.x))
+
+CER_s_trend <- lm(CER ~ t , data = e1_s)
+summary(CER_s_trend)
+
+CER_sdt <- as_tibble(CER_s_trend$residuals) %>% 
+  map(~ts_e1_s(.x))
+
+plot.ts(CER_sdt[[1]], main = "Detrended unempoyment rate, %, Canada", ylab = "CER_sdt", col = "blue")
+
+  
+```
+
+## b) Plot SACF and SPACF of CER_sdt.
+
+The SACF displays slow one-sided (i.e. not oscillating) damping and decaying, while the SPACF cuts off at lag (displacement) 2.
+
+
+```{r e1b, echo = TRUE, include = TRUE}
+
+ka = floor(min(10, length(CER_sdt[[1]])/5))
+acf(CER_sdt[[1]], lag.max = ka, plot = TRUE)
+pacf(CER_sdt[[1]], lag.max = ka, plot = TRUE)
+  
+```
+
+## c) Based on the sample correlolgrams, what ARMA(p,q) specification do you expect to model CER-sdt best?
+
+<br> 
+
+Looking at our rules of thumb above, our candidate is an AR(2) model.
+
+## d) Estimate your preferred ARMA(p,1) models augmented with a deterministic linear trend for CER_s (for the shortened but not de-trended CER variable) and evaluate the results.
+
+<br>
+
+For this model, we have also added the t variable as an additional regressor to the AR(2) model we've estimated to try and capture the impact of the series trend. 
+
+When we call Arima(), this function estimates teh ARMA model with all the dynamics placed in the error term.
+
+This difference is important to understand. The population ARMA model is 
+
+y_t = constant + linear trend + AR1 + AR2 + error
+
+Arima() estimates:
+
+y_t = constant + linear trend + n
+
+where n equals:
+
+n = AR1 + AR2 + error.
+
+Remember also that in week 3 (slide 26) you were told that an AR process is stationary if all if characteristic roots are inside the unit circle. You can see these retrieved below. The red dots are within the circle, therefore they are stationary.
+
+
+```{r e1di, echo = TRUE, include = TRUE}
+
+library(forecast)
+
+ar2ma0_CER_s  <- Arima(e1_s[["CER"]], order = c(2,0,0), xreg = e1_s[["t"]])
+
+summary(ar2ma0_CER_s)
+
+autoplot(ar2ma0_CER_s)
+
+```
+
+<br>
+
+Now let's conduct diagnostic checked by getting the t-test results for the AR(2) model and checking these residuals. 
+
+* Every p-value is practically zero, so every coefficient is significant.
+* The residuals seem in check despite is looking like the pattern changes after 1990.
+  + The bottom left correlogram doesn't have any significant spikes.
+  + The histogram of the residuals like close enough to the superimposed normal curve.
+  + The p-value of the LB test is 0.2808, so we maintain the null hypothesis of no autocorrelation of orders 1-8 in the residuals.
+  
+<br>
+
+Therefore, the AR(2) model seems good so far.
+
+```{r e1dii, echo = TRUE, include = TRUE}
+
+library(lmtest)
+coeftest(ar2ma0_CER_s, df = ar2ma0_CER_s$nobs - length(ar2ma0_CER_s$coef))
+
+checkresiduals(ar2ma0_CER_s)
+
+```
+## e) Try overfitting the model to see if the AR(2) model really is the best fit.
+
+<br> 
+
+This check is automatically perfored by the auto.arima function of the forecast package. 
+
+It gives us the same AR(2) model, and we retain this specification even when we tell auto.arima() to condition on different model selection criterion.
+
+```{r e1e, echo = TRUE, include = TRUE}
+
+auto.arima(e1_s[["CER"]], xreg = e1_s[["t"]], ic = 'aicc', seasonal = FALSE, trace = TRUE,
+stepwise = FALSE, approximation = FALSE)
+
+auto.arima(e1_s[["CER"]], xreg = e1_s[["t"]], ic = 'aic', seasonal = FALSE, trace = TRUE,
+stepwise = FALSE, approximation = FALSE)
+
+auto.arima(e1_s[["CER"]], xreg = e1_s[["t"]], ic = 'bic', seasonal = FALSE, trace = TRUE,
+stepwise = FALSE, approximation = FALSE)
+
+```
+
+## f) Now expand the model so that we can use the COVID period data.
+
+By looking at the data, we see that CER returned to its value in theh first quarter of 2020 by the third quarter of 2021. Hence, we'll use 7 dummy variables for 2020Q1 to 2021Q3.
+
+When we do this, we still get AR(2) as the preferred model.
+
+Between this model and the previous one, the AR1, AR2, intercept and t printouts are very similar. Not you cannot compare the model selection criterion because they were estimated over different sample periods.
+
+However, to chick the augmented specification of dummy variables is supported we have conducted a significant checked on them. This test below that the dummies are significant as a group and that the augmented model implies it is better than the original AR(2) model.
+
+```{r e1f, echo = TRUE, include = TRUE}
+
+e1f <- t6e1 %>% 
+  mutate(Date = as.Date(Date)) %>% 
+  mutate(I1 = ifelse(Date == "2020-01-01", 1, 0)) %>% 
+  mutate(I2 = ifelse(Date == "2020-04-01", 1, 0)) %>% 
+  mutate(I3 = ifelse(Date == "2020-07-01", 1, 0)) %>% 
+  mutate(I4 = ifelse(Date == "2020-10-01", 1, 0)) %>% 
+  mutate(I5 = ifelse(Date == "2021-01-01", 1, 0)) %>% 
+  mutate(I6 = ifelse(Date == "2021-04-01", 1, 0)) %>% 
+  mutate(I7 = ifelse(Date == "2021-07-01", 1, 0)) %>% 
+  mutate(t = row_number()) %>% 
+  select(-Date) %>% 
+  map(~ts_e1(.x))
+
+
+arima.new <- auto.arima(e1f[["CER"]], xreg = cbind(e1f[["t"]],e1f[["I1"]],e1f[["I2"]],e1f[["I3"]],e1f[["I4"]],e1f[["I5"]],e1f[["I6"]],e1f[["I7"]]), ic = "aicc", seasonal = FALSE, trace = TRUE,
+stepwise = FALSE, approximation = FALSE)
+
+coeftest(arima.new, df = arima.new$nobs - length(arima.new$coef))
+
+```
+
+## Asset Price Bubbles
+
+To date, we have learnt how to deal with situations where unit roots are less then one and when they are equal to one. That is, we use the Augmented Dicky-Fuller (ADF) test to do this.
+
+However, this doesn't cover all scenarios as the ADF test ignores if the unit root is less than -1 or greater than 1. Usually this is not a problem because this means the process is explosive (monotonic if >1 or an oscillating one if < -1). 
+
+However, is it occasionally used to perform formal hypothesis tests for this to test for asset price bubbles, where the prices moves in excess of its market fundamental price. This can be tested wit ha right-tail ADF with the following hypotheses:
+
+* H_o: unit root = 1
+* H_a: unit root > 1
+
+In this case, the process is nonstationary under both hypotheses. Under the null, it is some random wlk. while the alternative is explosive due to some bubble. The ADF right tail has two extensions:
+
+* Supremum ADF (SADF) test assume under the alternative hypothesis that during the sample period there is a single collapsing bubble
+* Generalised Supremum ADF (GSADF) assumed under the alternative hypothesis that during the sample period there are multiple periodically collapsing bubbles.
+
+Each of these tests consists of a set of ADF tests performed over some sequence of sub-samples and the SADF and GSADF test statistic value is the largest observed ADF test statistic.
+
+* adf.test() of the tseries package computes a left-tail (stationary) or right-tail (explose) ADF test for the nully hypothesis of a unit root.
+* radf() of the exuber package performance the ADFrt, SADF and GSADF test on variable y.
+
+Refer to page 15 of the tutorial for explanations of how the functions work, including default arguments.
+
+
+## Exercise 2
+
+### a) Generate and plot the log price-dividend ratio
+
+```{r e2a, echo = TRUE, include = TRUE}
+
+ts_e2 <- function(x) {
+  ts(x, start = c(1960,1), end = c(1989,12), frequency = 12)
+}
+
+
+t6e2 <- read_excel("C:/Users/joshc/Documents/2023S2/ECON90033/Tutorials/Week 6/t6e2.xlsx")
+
+
+e2a <- t6e2 %>% 
+  mutate(pdr = log(PR) - log(DIV)) %>% 
+  select(pdr) %>% 
+  map(~ts_e2(.x))
+  
+ts.plot(e2a[["pdr"]], main = "Log price-dividend ratio, NASDAQ", col = "red", ylab = "pdr")
+
+  
+
+```
+
+
+## b) Perform the ADF and ADFrt tests on the log price-dividend ratio by setting is alternative argument to stationary and explosive, respectively.
+
+<br>
+
+For both tests the p-values are large. Therefore we maintain the null hypotheses of unit roots being equal to 1.
+
+```{r e2b, echo = TRUE, include = TRUE}
+
+library(tseries)
+adf.test(e2a[["pdr"]], alternative = "stationary")
+adf.test(e2a[["pdr"]], alternative = "explosive")  
+
+```
+
+
+### c) Perform the SADF and GSADF test on the log price-dividend ratio
+
+NOTE: the ADF and ADFrt test regressions had 7 lags. Therefore, we use the same lag length in the SADF and GSADF tests.
+
+The prinout below shows that  teh ADFrt test statistics is -2.08, different from what we got in part (b). This is because radf only uses a constant in the test regression whereas adf.test() also has a trend.
+
+Because this is a right-tail test, and rejection is therefore to the right of the critical values, none of the unit root tests are rejected.
+
+This is the same for sadf and gsadf. Therefore, we maintain the null hypothesis of no bubble.
+
+```{r e2ci, echo = TRUE, include = TRUE}
+
+library(exuber)
+
+pdr_RADF <- radf(e2a[["pdr"]], lag = 7)
+
+summary(pdr_RADF)
+
+
+```
+
+<br>
+
+Let's looks at some details of the SADF test.
+
+* The first command confirms the decision drawn from the previous printout
+* The second displays a graph of the sequence of ADF test statistics along the 5% critical value (red dashed line). The observed SADF test statistic (-0.776) is at teh highest point of the blue curve. Because this is a right-tail test, the fact this blue line remains below the red dashed line indicates the nully hypothesis is maintained.
+
+```{r e2cii, echo = TRUE, include = TRUE}
+
+diagnostics(pdr_RADF, option = "sadf")
+
+autoplot(pdr_RADF, option = "sadf", nonrejected = TRUE)
+
+
+```
+
+
+<br>
+
+Now let's do the same for the GSADF.
+
+* The conclusion is that same, but the blue curve does cross the red on three occasions.
+* This suggests explosive periods, however they were not sufficiently long to be identified as bubbles.
+
+
+```{r e2ciii, echo = TRUE, include = TRUE}
+
+diagnostics(pdr_RADF, option = "gsadf")
+
+autoplot(pdr_RADF, option = "gsadf", nonrejected = TRUE)
+
+
+```
+

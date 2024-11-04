@@ -1,0 +1,388 @@
+---
+title: "Week 5 Tutorial"
+author: 'Josh Copeland'
+subtitle: 'ECON90033 - 2023 Semester 2 '
+date: "Completed on 2 September 2023"
+
+
+output: 
+  html_document:
+    theme: journal
+---
+
+```{r setup, include = FALSE}
+
+library(tidyverse)
+library(readxl)
+library(lubridate)
+library(forecast)
+library(knitr)
+
+```
+
+
+# Exercise 1
+
+The purpose of this exercise is to illustrate the difference between deterministic and stochastic trends
+
+## a) Draw and plot a random sample of 200 normal random numbers, eps, with 0 expected value and 5 standard deviation.
+
+
+```{r e1a, include = TRUE}
+
+set.seed(6082023)
+
+eps = ts(rnorm(200, mean = 0,  sd = 5))
+plot(eps, col = "red")
+abline(h = 0)
+
+
+```
+
+## b) use this rando mseries to simular the following trend stationary process: y_t = 50 - 0.5t + epsilon_t. Use a for-loop to do this.
+
+This simulated series {y1_t} appeares to be fluctuating randomly with constant variance around the 50 - 0.5t deterministic linear trend.
+
+
+```{r e1b, include = TRUE}
+
+t <- ts(1:200)
+
+y1 <- ts(50, start = 1, end = 200)
+
+for (t in 2:200)
+{y1[t] = ts(50 - 0.5*t + eps[t])}
+
+plot.ts(y1, col = "darkblue")
+abline(h = 0)
+
+```
+
+
+## c) Calculate and plot the cumulative sum of the eps random series
+
+If you did not know how this series below was generated, you could think that just like in part (b) it is flutuating around some downard sloping straight line with constant variance.
+
+However, this is a stochastic trends whose variance (sigma^2*t = 25t) is increasing in time.
+
+
+```{r e1c, include = TRUE}
+
+st <- ts(cumsum(eps))
+plot(st, col = "darkgreen")
+
+```
+
+
+## d) Use the same random series as before to simulate the following difference stationary process: y_t = -0.5 + y_t-1 + epsilon_t.
+
+
+<br>
+
+Just like in part (c), if you did not know how this series was generated, you could think that it is fluctuating around some downward sloping straight line with constant variance. This series, however, has both a deterministic and a stochastic trend, since by backward iteration, and due to the stochastic trend, its variance (σ^2_t = 25t) is increasing in time.
+
+
+```{r e1d, include = TRUE}
+
+y2 = ts(50, start = 1, end = 200)
+for (t in 2:200)
+{y2[t] = ts(-0.5 + y2[t-1] + eps[t])}
+plot(y2, col = "orange")
+abline(h = 0)
+
+```
+
+
+#Exercise 2: spurious regression
+
+<br>
+
+Generally, spurious (or nonsense) regression typically means a statistically significant regression of totally unrelated variables. 
+
+It typically occurs when highly persistent non-stationary variables are regressed on each other without removing the deterministic or stochastic trends in these variables. This exercise illustrates this problem.
+
+<br>
+
+## a) Draw two independent random samples of 200 standard normal random numbers, epsx and epsy, and illustrate them using a time-series plot and a scatter diagram (epsy against epsx).
+
+<br>
+
+Looking at the scatterplot below that represent the pairs of observations randomly generated, it looks like they're scattered randomly aruond the origin. This suggest there's no relationship between them, which we would expect, since they're two random independent variables drawn from two populations.
+
+
+```{r e2a, include = TRUE}
+
+set.seed(6082023)
+epsy = ts(rnorm(200))
+epsx = ts(rnorm(200))
+
+plot.ts(epsx, col = "blue")
+lines(epsy, col = "red")
+legend("bottomright", bty="n", lty=c(1,1), col=c("blue", "red"),
+legend = c("epsx", "epsy"))
+abline(h = 0)
+
+library(zoo)
+plot.zoo(epsx, epsy, pch = 19, col = "forestgreen")
+abline(h = 0)
+abline(v = 0)
+
+
+```
+
+
+## b) Using the two white noise series from part (a), generate two pure random walks, x1 and y1, with zero initial values. Graph them on a time-series plot and on a scatter diagram. These random walks are the previous value plus some error term.
+
+<br>
+
+From the dotplots generated, it looks like there is a positive relationship between these variables, which is confirmed by the Perason correlation coefficient (H_o = correlation is zero) as the p-value is practically zero. 
+
+Importantly, to test for positive correlation (i.e. >0) than you take a one-sided p-value (divide it by 2) to test. Halving the p-value does not alter the conclusion above.
+
+<br>
+
+```{r e2b, include = TRUE}
+
+y1 <- ts(0, start = 1, end = 200)
+x1 <- ts(0, start = 1, end = 200)
+for (t in 2:200) {
+y1[t] = ts(y1[t-1] + epsy[t])
+x1[t] = ts(x1[t-1] + epsx[t])
+}
+
+ts.plot(x1, y1, col = c("blue", "red"))
+legend("bottomleft", bty="n", lty=c(1,1), col=c("blue", "red"),
+legend <- c("x1", "y1"))
+abline(h = 0)
+plot.zoo(x1, y1, pch = 19, col = "forestgreen")
+abline(h = 0)
+abline(v = 0)
+
+
+cor.test(x1, y1)
+
+```
+
+
+## c) estimate this relationship by regressing y1 on a constant x1
+
+<br>
+
+This linear regression is significant (F-stat p-value ~ 0) and accounts for about 32% of the total variation og y1 in this sample (multiple R-square = 0.3208).
+
+This regression, however, is spurious because x1 and y1 had been generated completely independently of each other. This does not mean that the correlation detected between the two series does not exist, they are indeed correlated with each other because the two random walks behind them are correlated.4 It just means that the revealed relationship is a purely statistical relationship, a co-movement, and it does not reflect any real relationship between the two variables.
+
+<br>
+
+```{r e2c, include = TRUE}
+
+m1 <- lm(y1 ~ x1)
+summary(m1)
+
+```
+
+
+## d) Simulate two random walks with drift, x2 and y2, using the same epsx and epsy series as before, assuming that the drift term is 0.5 for x2 and -0.3 for y2, and that the initial values are zero. Regress y2 on a constant and x2. What do you notice?
+
+
+<br> 
+
+This regression is also significant, and it explains about 98.5% of the total sample variations of y2. Nevertheless, this is again a spurious regression as the extremely good fit to the data is due entirely to the correlation between the two random walks.
+
+But why is the R-squared value so high? This is because of the constant terms (also called drift terms), the random walks have both deterministic and stochastic trend - i.e. the -0.3 and 0.5 added to y2 and x2 respectively.
+
+In the previous example, we only have stochastic trends. For stochastic trends, the sum of the error terms can be strongly, but definitely imperfectly correlated with each other.
+
+Due to the intercept terms, the random walks also have deterministic trends which are perfectly correlated with each other.
+
+THEREFORE, this illustrates:
+
+* the importance of finding out whether the stochastic processes that generated the sample data are stationary, trend stationary or difference stationary. This can be done by performing tests for a unit root versus stationary.
+
+<br>
+
+```{r e2d, include = TRUE}
+y2 <- ts(0, start = 1, end = 200)
+x2 <- ts(0, start = 1, end = 200)
+for (t in 2:200) {
+y2[t] = ts(-0.3 + y2[t-1] + epsy[t])
+x2[t] = ts(0.5 + x2[t-1] + epsx[t])
+}
+
+m2 = lm(y2 ~ x2)
+summary(m2)
+
+```
+
+
+# Exercise 3: testing for a unit root/stationarity
+
+<br>
+
+There are many different tests for a unit root versus stationarity, but none of them is superior in all applications. For this reason, in practice one should always use several alternative tests. In this course, due to lack of time, we consider only two tests, the Dickey-Fuller (DF) τ test for a unit root and the Kwiatkowski-Phillips-Schmidt-Shin (KPSS) test for stationarity.
+
+The Dicky-fuller test works as follows: 
+
+* H_o: characteristic root is equal to one, therefore there is a unit root and the process is not stationary
+* H_a: the characteristic root is between -1 and 1, and therefore stationary. 
+
+Properly specifying the test regression is crucial because missing a deterministic term (intercept or trend) might prevent the test to reject the null hypothesis even if it is false.
+
+Another key issue is the assumption that the error in a test regression in the DF test regression is a white noise process which is serially uncorrelated. This is certainly violated when the for AR(p) where p > 2. If this is the case, you need to augment with sufficient lags.
+
+<br>
+
+## a) Calculate the two excess return series as you did in tutorial 3.
+
+```{r e3a, include = TRUE}
+
+e1 <- read_excel("C:/Users/joshc/Documents/2023S2/ECON90033/Tutorials/Week 3/t3e1.xlsx") 
+
+e1_analysis <- e1 %>% 
+  select(Date, Exxon, SP500, Tbill) %>% 
+  mutate(Exxon_r = Exxon / lag(Exxon) - 1)  %>% 
+  mutate(SP500_r = SP500 / lag(SP500) - 1) %>%
+  mutate(Tbill_r = Tbill / 12) %>% 
+  mutate(Exxon_ER = Exxon_r - Tbill_r) %>% 
+  mutate(SP500_ER = SP500_r - Tbill_r) %>% 
+  na.omit()
+
+Exxon_ER <- e1_analysis %>% 
+  select(Exxon_ER) %>% 
+  ts(start = c(1990, 4), end = c(2004, 7), frequency = 12)
+
+SP500_ER <- e1_analysis %>% 
+  select(SP500_ER) %>% 
+  ts(start = c(1990, 4), end = c(2004, 7), frequency = 12)
+
+```
+
+
+## b) Test the excess return series for a unit root with the ur.df function. Select the lag length by minimising BIC.
+
+The chart below shows that neither series has a trend, that they fluctuate around some constants. Since these constants might be different from zero, it is better to include an intercept in the test regression.
+
+Using the DF test output below, we can see that:
+
+* Two test statistic values are used, which is because ur.df performs two tests on the test regression. 
+
+  + The first (tau2) is the ADF test
+  
+  + The second (phi1) is a joint test for the null hypothesis that there is a unit root but no intercept. In this course we only focus in the first test!
+
+Importantly, don't use any of the p-values here! This is because this p-value on the printout is based on a t-distribution, not on the sampling distribution of the ADF tau2 statistic.
+
+Instead, for significant, compare the test statistic to the tau2 criticalvalue in the bottom part of the printout. These tau tests are left-tail tests, so rejection is left to the relevant critical value.
+
+In this case the observed τμ test statistic value (-9.1641) is smaller than the 1% tau2 critical value (-3.46), so the null hypothesis of a unit root can be rejected at the 1% significance level, implying that Exxon_ER is stationary.
+
+However, this could be incorrect if the error term is autocorrelated. to do this, refer to the final plot given below:
+
+* The top plot shows the sample correlograms if the residuals, which look random.
+* None of the sample autocorrelation or partial autocorrelation coefficients are significant. 
+
+Therefore, there's no reason to assume the error term in the test regression is autocorrelated - therefore we can rely on the ADF test result.
+
+<br>
+
+
+```{r e3bi, include = TRUE}
+
+plot.ts(Exxon_ER, ylab = "ER.Exxon, ER.SP500", col = "red", ylim = c(-0.15, 0.20))
+lines(SP500_ER, col = "blue", lty = 2)
+legend("bottomleft", legend = c("Exxon_ER", "SP500_ER"),
+       col = c("red","blue"), lty = 1:2)
+
+
+library(urca)
+Exxon_ER_DF <- ur.df(Exxon_ER, type = "drift", selectlags = "BIC")
+summary(Exxon_ER_DF)
+
+plot(Exxon_ER_DF)
+
+```
+
+<br>
+
+Let's repeat this exercise for for SP500. We basically get the same results as previously:
+
+* There is onkly one lag in the test regression
+*The test stat is smaller than the 1% tau2 critical value. Therefore, we can reject H_o, which implies this series might be stationary.
+* The residuals are serially uncorrelated, so one lag is sufficient.
+
+IMPORTANTLY, the ADF test results only test for a single nuit root, which might incorrectly reject the nully of there are actually two unit roots. In this case, two levels of differencing are required to achieve stationarity.
+
+Therefore, you should always repeat the test on the differenced series as well, becausethe difference of a stationary variable is also startionary. However, the difference of a variable that is nonstationary due to a unit root, might still be nonstationary due to a second root.
+
+## c) Test the first differences of the excess return series for a unit root with the ADF test.
+
+On this printout, the tau statistic (-14.84) is smaller than the 1% crit value (-2.58), therefore we can reject the null hypothesis of a unit root at the 1% signifcance level. This implies the first difference is stationary.
+
+Since we also reject the null hypothesis for the level and first difference, we can conclude that this series is stationary.
+
+This can also be said for the SP500_ER series. Since we found both Exxon_ER and SP500_ER stationary, we can conclude that the CAPM we estimated for Exxon is not spurious.
+
+<br>
+
+```{r e3c, include = TRUE}
+
+Exxon_ER_DF2 <- ur.df(diff(Exxon_ER), type = "none", selectlags = "BIC")
+summary(Exxon_ER_DF2)
+
+SP500_ER_DF2 <- ur.df(diff(SP500_ER), type = "none", selectlags = "BIC")
+summary(SP500_ER_DF2)
+
+```
+
+## d) Perform the KPSS test on the two excess return series
+
+<br>
+
+The reason why the KPSS is a good alternative to the DF test is because the null and alternate hypotheses are switched. Therefore, you should have even more confidence in your tests if they're both telling you the same thing.
+
+For this test, the test statistic needs to be to the right of the critical value.
+
+The test statistic is 0.4461. It is larger that the 10% critical value but smaller than all others. Therefore, we can only reject the null hypothesis at the 10% significant level. Rejection is to the right of the critical values because they decrease as siginficance levels increase.
+
+The residuals plotted below also look good, so we can accept the KPSS result. At the 10% result, these tests disagree. Why?
+
+* For the ADF test, the null hypothesis is reject at all significance levels. This implies stationarity at all significance levels.
+* For the KPSS test, The null hypothesis is only rejected at the 10% level. This implies stationary at all significance levels except for the 10% level.
+
+At the 10% level, the ADF and KPSS test results go against each other. In this circumstance, it is safer to assume that there is a unit root, which you can attempt to eliminate by differencing.
+
+Below we perform the test on the differenced series, which provides a test stat that is smaller even than the 10% critical value. Therefore, once differenced (and residuals have been accounted for) the ADF and KPSS tests are consistent.
+
+Doing this for SP500 yields the same result, suggesting the first differences of both series are stationary.
+
+<br>
+
+```{r e3d, include = TRUE}
+
+Exxon_ER_KPSS <- ur.kpss(Exxon_ER, type = "mu", lags = "short")
+summary(Exxon_ER_KPSS)
+
+plot(Exxon_ER_KPSS)
+
+Exxon_ER_KPSS2 <- ur.kpss(diff(Exxon_ER), type = "mu", lags = "short")
+summary(Exxon_ER_KPSS2)
+
+SP500_ER_KPSS <- ur.kpss(SP500_ER, type = "mu", lags = "short")
+summary(SP500_ER_KPSS)
+
+plot(SP500_ER_KPSS)
+
+SP500_ER_KPSS2 <- ur.kpss(diff(SP500_ER), type = "mu", lags = "short")
+summary(SP500_ER_KPSS2)
+
+```
+
+
+<br>
+
+
+Finally, returning to the CAPM model, just a brief remark. In spite of the potentially (i.e., depending on the preferred significance level) contradicting ADF and KPSS tests results on the level of ER.Exxon, we can be quite confident that the CAPM regression is not spurious.
+
+<br>
+
+The reason for this is that spurious regressions in general fit to the data reasonably well but they suffer from positive first order autocorrelation. If you review pages 6-8 of tutorial 3, you can see that the CAPM model has a modest R2 and there is not any sign of autocorrelation.

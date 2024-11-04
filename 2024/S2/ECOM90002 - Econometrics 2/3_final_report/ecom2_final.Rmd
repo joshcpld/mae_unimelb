@@ -1,0 +1,594 @@
+---
+title: "Econometrics 2 capstone final report data code"
+author: "Josh Copeland, Jocelyn Koswara and Ryan Luo"
+date: "2024-10-1"
+output: html_document
+---
+
+```{r setup_include_false, include=FALSE}
+library(tidyverse)
+library(AER)
+library(stargazer)
+library(lmtest)
+library(sandwich)
+library(rvest)
+library(writexl)
+library(openxlsx)
+library(naniar)
+```
+
+```{r setup_include, include=FALSE}
+
+#Packages used for this report:
+
+# library(tidyverse)
+# library(AER)
+# library(stargazer)
+# library(lmtest)
+# library(sandwich)
+# library(rvest)
+# library(writexl)
+# library(openxlsx)
+# library(naniar)
+
+```
+
+# Importing and cleaning data
+
+<br>
+
+Tables used for the progress report:
+
+- Psychology (S10AI)
+- Housing: water (S12AI)
+- Household background information (S1D)
+- Key household information (key_hhld_info)
+
+In order to derive the following variables:
+
+- Binary variable indicating mental health status (1 = likely to have a mental health disorder) (S10AI)
+- Binary variable indicating access to basic drinking water services (1 = has access) (S1D)
+- Age (S10AI)
+- Binary variable indicating sex (1 = female) (S10AI)
+- Binary variable indicating religious minority (1 = not Christian) (S1D)
+- Binary variable indicating if the person lives in an urban or rural area (1 = in an urban area) (S1D)
+
+Analysis in this markdown document is separated by each data table imported.
+
+### Importing the Pyschology table
+
+```{r importing_data, message=FALSE, warning=FALSE}
+
+################################################################################
+################################ PSYCHOLOGY TABLE ##############################
+################################################################################
+
+s10ai <- read_csv("data/S10AI.csv") %>% 
+  select(hhno, hhmid, depression, sex = s1d_1, age = s1d_4i) %>% 
+  
+  #Creating a new column as our depression_dummy. Kessler scores between 10-19 have a score of one in the data (== "likely to be well"). Anyone with scored higher than this has a score > 1, which classifies them as likely to have at least a mild disorder.
+  mutate(depression_dummy = case_when(
+    
+    depression > 1 ~ 1, # Depressed
+    TRUE ~ 0 # Not depressed
+    
+  )) %>% 
+  
+  # Turning sex into a dummy variable (1 == female)
+  
+  mutate(sex = case_when(
+    
+    sex == 1 ~ 0,
+    sex == 2 ~ 1
+    
+  ))
+
+
+######################## EXTRACTING JUST THE RELEVANT VARIABLES ################
+
+s10ai <- s10ai %>% 
+  select(hhno, hhmid, depression_dummy, sex_dummy = sex, age)
+
+
+
+```
+
+### Importing the housing table
+
+<br>
+
+We are importing this table to create a dummy variable for access to basic drinking services.
+
+<br>
+
+UNICEF defines a household's access to water as "basic" if it satisfies the following conditions:
+
+ - It's delivered from one of the following sources: piped water, boreholes, tubewells, protected dug well, protected springs, rainwater and packaged of delivered water.
+ 
+ - A round trip to collect water does not exceed 30 minutes.
+ 
+ 
+ <br>
+ 
+ UNICEF actually has different definitions for water access, where we want to capture dummies for them as one of our extensions. They are defined as:
+ 
+ - Safely managed: Drinking water from an improved water souce which is located on premises, available when needed and free of faecal and priority contamination.
+ 
+ - Basic: as defined above.
+ 
+ - No services: drinking water collected directly fro ma river, dam, lake, pond, stream, canal or irrigation channel.
+
+``` {r importing_ii}
+
+################################################################################
+############################### HOUSING TABLES #################################
+################################################################################
+
+############################### WATER TABLE ####################################
+
+
+
+
+
+
+
+s12ai <- read_csv("data/S12AI.csv") %>% 
+  select(hhno,drinking_source = s12a_9i, drinking_source_distance_length = s12a_10ai, distance_unit = s12a_10aii, drinking_source_distance_mins = s12a_11) %>% 
+  
+  #Editing the drinking_source_distance cells to make them all the same scale: kilometres.
+    
+  mutate(drinking_source_distance_length = case_when(
+    
+    distance_unit == 0 ~ 0,  # In house
+    distance_unit == 1 ~ as.numeric(drinking_source_distance_length) * 0.0009144,  # Yards to kilometers
+    distance_unit == 2 ~ as.numeric(drinking_source_distance_length) / 1000,  # Meters to kilometers
+    distance_unit == 3 ~ as.numeric(drinking_source_distance_length),  # Already in kilometers
+    distance_unit == 4 ~ as.numeric(drinking_source_distance_length) * 1.609344,  # Miles to kilometers
+    TRUE ~ drinking_source_distance_length
+    
+  ))
+  
+
+
+vis_miss(s12ai)
+
+gg_miss_var(s12ai)
+
+
+```
+
+The charts above shows us that there is a lot of missing values for the distance variables in both length and mins. This likely have something todo with the drinking source of each household. I need to collect all the NA data together in order to diagnose the problem.
+
+The charts below show us that:
+
+ - Most of the problem is in 1 and 2, which correspond to plumbing in the house. We can change their distances to zero.
+ 
+ - 8 is also a clear problem, which is bottled water. We think its reasonable to assume this botteld water is available at the house, so can change this distance to zero as well.
+ 
+- 9 and 10 are protected wells and boreholes. Without more information about how far away they are (unavailable) we need to leave these as NAs.
+
+``` {r importing_iii}
+
+# Extracting and charting NA data
+
+na_data <- s12ai %>% 
+  filter(is.na(drinking_source_distance_length)) %>% 
+  group_by(drinking_source) %>% 
+  summarise(na_count = n())
+  
+ggplot(na_data, aes(x = drinking_source, y = na_count)) +
+  geom_bar(stat = "identity") + 
+  scale_x_continuous(breaks = scales::pretty_breaks(n = 14))
+
+
+
+
+# Now I have diagnosed the problem, I need to make the necessary changes to the dataframe such that dirnking_sources with values 1 and 2 have a distance of zero in both length and minutes. All other NAs remain given data limitations.
+
+s12ai <- s12ai %>% 
+  mutate(drinking_source_distance_length = case_when(
+    
+    is.na(distance_unit) & drinking_source %in% c(1, 2, 8) ~ 0,
+    TRUE ~ drinking_source_distance_length
+  )) %>% 
+  
+  mutate(drinking_source_distance_mins = case_when(
+        is.na(distance_unit) & drinking_source %in% c(1, 2, 8) ~ 0,
+    TRUE ~ drinking_source_distance_mins
+  ))
+
+
+
+# Repeating the NA value analysis/chart below, the scale are now sufficiently small to continue/we don't have any other information that could help reduce the incidence of NAs.
+
+na_data <- s12ai %>% 
+  filter(is.na(drinking_source_distance_length)) %>% 
+  group_by(drinking_source) %>% 
+  summarise(na_count = n())
+
+ggplot(na_data, aes(x = drinking_source, y = na_count)) +
+  geom_bar(stat = "identity") + 
+  scale_x_continuous(breaks = scales::pretty_breaks(n = 14))
+
+gg_miss_var(s12ai)
+
+
+# Because we can't deal with the remaining NAs, we exclude them from our analysis. However, we only exclude where NAs appear in the drinking_source_distance_length and drinking_source_distance_mins  variables.
+
+s12ai <- s12ai %>% 
+  filter(!is.na(drinking_source_distance_length)) %>% 
+  filter(!is.na(drinking_source_distance_mins))
+
+vis_miss(s12ai)
+
+
+```
+
+<br> 
+
+Now we can actually produce our dummy variable for access to "basic drinking services".
+
+```{r importing_iv}
+
+s12ai <- s12ai %>% 
+  
+  # Basic access
+  
+  mutate(
+    
+    basic_access_dummy = case_when(
+    
+      drinking_source_distance_mins <= 30 & 
+      drinking_source %in% c(1, # Indoor plumbing
+                             2, # Inside standpipe
+                             5, # Pipe in niehgbouring household
+                             6, # Private outside standpipe/tap
+                             7, # Public standpipe
+                             8, # Sachet/bottled water
+                             9, # Borehole
+                             10) # Protected well
+    ~ 1,
+    TRUE ~ 0
+  )) %>% 
+
+  # Safely managed
+  
+  mutate(
+    
+    safely_managed_dummy = case_when(
+      
+            drinking_source_distance_mins <= 2 & 
+            drinking_source %in% c(1, # Indoor plumbing
+                             2, # Inside standpipe
+                             5, # Pipe in niehgbouring household
+                             6, # Private outside standpipe/tap
+                             7, # Public standpipe
+                             8, # Sachet/bottled water
+                             9, # Borehole
+                             10) # Protected well
+        ~ 1,
+        TRUE ~ 0
+            )) %>% 
+  
+  # No service
+  
+  mutate(no_service_dummy = case_when(
+    
+    drinking_source %in% c(12, # River/Stream
+                           14) #Dugout/ponk/lake/dam
+               
+           ~ 1,
+       TRUE ~ 0 
+  ))
+  
+  
+```
+
+
+
+
+<br>
+
+# Importing the hosehold background information table
+
+<br>
+
+```{r hh_background}
+
+######################### RELIGIOUS MINORITY DUMMY #############################
+
+
+s1d <- read_csv("data/S1D.csv") %>% 
+  select(hhno, hhmid, religion = s1d_13, ethnicity = s1d_16) %>% 
+  mutate(not_christian_dummy = 0) %>% 
+  mutate(not_christian_dummy = case_when(
+    
+    # The following values of religion correspond with Christianity: 1,2,3,4,5 and 7.
+    
+    religion %in% c(1,2,3,4,5,7) ~ 0, 
+    TRUE ~ 1
+    
+  ))
+
+# Is it reasonable to think of Christian as the relgious majority? The chart below suggest they account for ~ 60% of the population. Therefore, it's reasonable to account for non-Christians are part of the relgious minority in Ghana.
+
+religion_dummy_frequency <- s1d %>% 
+  group_by(not_christian_dummy) %>% 
+    summarise(count = n()) %>%
+  mutate(percentage = (count / sum(count)) * 100) 
+  
+  
+
+ggplot(religion_dummy_frequency, aes(not_christian_dummy, percentage)) + geom_bar(stat = "identity")
+
+
+
+
+######################## EXTRACTING JUST THE RELEVANT VARIABLES ################
+
+s1d <- s1d %>% 
+  select(hhno, hhmid, not_christian_dummy)
+
+```
+
+
+# Importing key household information
+
+```{r, key_hhld_info}
+
+key_hhld_info <- read_csv("data/key_hhld_info.csv") %>%
+  select(hhno, rural_dummy = urbrur) %>%
+  mutate(rural_dummy = case_when(
+    
+    rural_dummy == "1" ~ 0,
+    TRUE ~ 1
+    
+  ))
+
+
+```
+
+# Joining data
+
+<br> 
+
+Household data is not provided at the individual level. Therefore, we need to append it to our psychological data.
+
+Doing a quick NA visualisation I can see that there are a few columns with NA values. Given how small they are as proportions, I omit the NA values for depression and drinking_source_distance. I don't both with distance_unit (its only use was to help us clean the data earlier.)
+
+
+``` {r joining}
+
+data <- s10ai %>% 
+  inner_join(s12ai, by = "hhno") %>% 
+  inner_join(key_hhld_info, by = "hhno") %>% 
+  inner_join(s1d, by = c("hhno", "hhmid")) %>%  # This data is collected on the individual, therefore we need to join at the sub-household level.
+
+  mutate(id = hhno + hhmid) %>%  # Creating a single hh identifier column
+  
+  select(id, depression_dummy, basic_access_dummy, sex_dummy, age, not_christian_dummy, rural_dummy, drinking_source_distance_mins, safely_managed_dummy, no_service_dummy) #getting data columns into a helpful order
+  
+vis_miss(data)
+
+
+# Omitting the very few remaining NA values
+
+data <- data %>% 
+  na.omit()
+
+```
+
+<br>
+
+# Creating summary statistics
+
+```{r summary_stats}
+
+
+vars <- colnames(data)[!colnames(data) %in% c("id")]
+
+# Create summary statistics
+summary_stats <- data %>%
+  summarise(across(all_of(vars), 
+                   list(
+                     mean = ~ mean(.x, na.rm = TRUE),
+                     sd = ~ sd(.x, na.rm = TRUE),
+                     min = ~ min(.x, na.rm = TRUE),
+                     max = ~ max(.x, na.rm = TRUE)
+                   ), 
+                   .names = "{.col}_{.fn}")) 
+
+# Reshape to long format
+summary_stats <- summary_stats %>%
+  pivot_longer(cols = everything(),  
+               names_to = c("variable", "statistic"), 
+               names_pattern = "(.*)_(.*)") %>%   # Match everything before the last underscore
+  mutate(value = round(value,2))
+
+
+summary_stats <- summary_stats %>%
+  pivot_wider(names_from = statistic, values_from = value)
+
+summary_stats$max <- format(summary_stats$max, scientific = FALSE)
+
+
+print(summary_stats)
+
+
+#################################### SAVING OFF DATA ###########################
+
+write_csv(summary_stats, "summary_stats.csv")
+
+write_csv(data, "model_data.csv")
+
+
+```
+
+
+# Producing model outputs
+
+
+```{r data_import_models}
+
+data <- read_csv("model_data.csv")
+
+```
+
+
+# Key models/output
+
+```{r models}
+
+#################################### MODELS ####################################
+
+# linear regression model
+m1 <- lm(depression_dummy ~ basic_access_dummy, data = data)
+
+
+# Multiple linear regresion model
+m2 <- lm(depression_dummy ~ basic_access_dummy + sex_dummy + age + not_christian_dummy + rural_dummy, data = data)
+
+
+# First stage 2SLS model
+m3 <- lm(basic_access_dummy ~ drinking_source_distance_mins + sex_dummy + age + not_christian_dummy + rural_dummy,
+                  data = data)
+
+# Second stage 2SLS model
+m4 <- ivreg(depression_dummy ~ basic_access_dummy + sex_dummy + age + not_christian_dummy + rural_dummy |
+      sex_dummy + age + not_christian_dummy + rural_dummy + drinking_source_distance_mins, data = data)
+
+summary(m4, vcov=vcovHC, diagnostics = TRUE)
+
+
+```
+
+# Formatting output
+
+```{r formatting_output}
+
+#################################### OUTPUT TABLES ##############################
+
+
+key_results <- stargazer(m1,
+                         m2,
+                         m3,
+                         m4, 
+                         type = "html",
+                         title = "Table 2: Model estimates",
+                           se = list(
+                          sqrt(diag(vcovHC(m1))),
+                          sqrt(diag(vcovHC(m2))),
+                          sqrt(diag(vcovHC(m3))),
+                          sqrt(diag(vcovHC(m4)))
+                          ),
+                        out = "Key_Results.html"  
+                                
+  )
+
+key_results <- stargazer(m1,
+                         m2,
+                         m3,
+                         m4, 
+                         type = "text",
+                         title = "Table 2: Model estimates",
+                           se = list(
+                          sqrt(diag(vcovHC(m1))),
+                          sqrt(diag(vcovHC(m2))),
+                          sqrt(diag(vcovHC(m3))),
+                          sqrt(diag(vcovHC(m4)))
+                          )  )
+
+##################### AUTOMATING OUTPUTTING TABLES TO XLSX FILE ################
+
+key_results_table <- read_html("Key_Results.html") %>% 
+    html_table(fill = TRUE) %>% 
+    pluck(1) %>% 
+    filter(if_any(c(X1, X2, X3), ~ . != ""))
+
+write_xlsx(key_results_table, "key_results_table.xlsx")
+
+```
+
+
+
+# Robustness checks
+
+## Changing definitions of water access
+
+Ultimately, our chosen definition of water access has been chosen arbitrarily from UNICEF's taxonomy of access. If our results are robust, the size of our estimators should decrease as we move from the lowest ("no service") to highest ("safely managed") level of water access. The better the access, the greater an impact it should have on reducing the incidence of mental health issues.
+
+```{r rc_water_check}
+
+################################## CREATING MODELS #############################
+
+
+#No service
+m5 <- ivreg(depression_dummy ~ no_service_dummy + sex_dummy + age + not_christian_dummy + rural_dummy |
+      sex_dummy + age + not_christian_dummy + rural_dummy + drinking_source_distance_mins, data = data)
+
+
+# Basic access
+m6 <- ivreg(depression_dummy ~ basic_access_dummy + sex_dummy + age + not_christian_dummy + rural_dummy |
+      sex_dummy + age + not_christian_dummy + rural_dummy + drinking_source_distance_mins, data = data)
+
+
+# Safely managed
+m7 <- ivreg(depression_dummy ~ safely_managed_dummy + sex_dummy + age + not_christian_dummy + rural_dummy |
+      sex_dummy + age + not_christian_dummy + rural_dummy + drinking_source_distance_mins, data = data)
+
+
+
+################################# COMPARING OUTPUT #############################
+
+rc_water_def_results <- stargazer(
+          m5,
+          m6,
+          m7,
+          type = "html",
+          title = "Table X: Changing water definition estimates",
+          se = list(
+          sqrt(diag(vcovHC(m5))),  
+          sqrt(diag(vcovHC(m6))),
+          sqrt(diag(vcovHC(m7)))
+          ),
+          out = "RC_Water_Def_Results.html"
+          )
+
+
+rc_water_def_results <- stargazer(
+          m5,
+          m6,
+          m7,
+          type = "text",
+          title = "Table X: Changing water definition estimates",
+          se = list(
+          sqrt(diag(vcovHC(m5))),  
+          sqrt(diag(vcovHC(m6))),
+          sqrt(diag(vcovHC(m7)))
+          )          )
+
+##################### AUTOMATING OUTPUTTING TABLES TO XLSX FILE ################
+
+rc_water_def_results_table <- read_html("RC_Water_Def_Results.html") %>% 
+    html_table(fill = TRUE) %>% 
+    pluck(1) %>% 
+    filter(if_any(c(X1, X2, X3, X4), ~ . != ""))
+
+write_xlsx(rc_water_def_results_table, "rc_water_def_results_table.xlsx")
+
+print
+
+
+##################### AUTOMATING OUTPUTTING TABLES TO XLSX FILE ################
+
+key_results_table <- read_html("Key_Results.html") %>% 
+    html_table(fill = TRUE) %>% 
+    pluck(1) %>% 
+    filter(if_any(c(X1, X2, X3), ~ . != ""))
+
+write_xlsx(key_results_table, "key_results_table.xlsx")
+
+
+```
+
+

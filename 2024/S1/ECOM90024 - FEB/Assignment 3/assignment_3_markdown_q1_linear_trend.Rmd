@@ -1,0 +1,305 @@
+---
+title: "ECOM90024 - Assignment 3 - Question 1"
+author: "Josh Copeland"
+date: "2024-05-22"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+library(lubridate)
+library(forecast)
+library(urca)
+
+theme_set(theme_minimal())
+
+```
+```{r setup_text}
+
+# Packages used for this assignment
+ 
+# library(tidyverse)
+# library(lubridate)
+# library(forecast)
+# library(urca)
+
+```
+
+
+## a) Using the Case Shiller housing price data from Assignment 2, test for the presence of a unit root using an appropriate Augmented Dicky Fuller and determine the order of integration.
+
+<br>
+
+* Before conducting the unit root test, I note:
+
+   + Chart 1 below shows a plot of the data from the Case-Shiller US National Home Price Index, which seeks to measures the price level of existing single family-homes in the US. The data provided shows this price level from January 1987 to December 2022.
+
+   + There is a clear upward trend in this series over time, but there is also clear evidence of cyclical fluctuations in the data. It is unclear to what extent the curvature of this series is attributable to the trend or the incidence of cyclical fluctuations in the series over time. It's also possible that some of the shorter-term fluctuations (that seem to increase over time) could be attributable to seasonal patterns in the data. Testing and accounting for both of these deterministic patterns in the data is required to isolate the cyclical fluctuations.
+   
+   + The clearest indicator of cyclical fluctuations in this data is the significant acceleration of growth in the series in the mid-2000s (and the decline which followed in 2007/2008), likely driven by the unsustainable household credit conditions that culminated in the US' sub-prime mortgage crisis that kicked off the Global Financial Crisis. 
+
+<br>
+
+```{r ai}
+
+data <- read_csv("csindex.csv") %>% 
+  select(date = DATE, price_level = CSUSHPISA) %>% 
+  mutate(date = dmy(date)) %>% 
+  na.omit()
+
+
+ggplot(data, aes(x = date, y = price_level)) + 
+  geom_line() + 
+  ggtitle("Chart 1: Price level of existing single family-homes in the US from January 1987 to December 2022") +
+  labs( x = "Date", 
+        y = "Index", 
+        caption = "Source: S&P CoreLogic, Case-Shiller Home Price Index.") + 
+  theme(plot.title = element_text(size = 10),
+        plot.caption = element_text(hjust = 0))
+
+```
+
+<br>
+
+* I then specify and estimate using OLS any deterministic trend and seasonality components I believe to exist:
+
+  + Given my observation above of a long-run upwards trend to this price level data, I consider it reasonable to account for this deterministically before conducting the unit root test. I test the fit of three different models and judge the linear trend model as the preferred one based off the output of model_selection_criteria table below. I have only tested the fit of these models up until the end of 2018 given the specified timeframe for our time series model in part (b). Chart 2 visualises their fits.
+  
+  + Using the detrended series we are able to determine if there is any deterministic seasonality in the data: I conclude this is not the case. This is done by generating a collection of dummy variables for each month of the year, and then regressing the detrended series on these dummy variables (as seen in the summary of the seasonal_model object). None of the estimated ceofficients are statistically different from zero. Moreover, they are jointly equal to zero according to the reported overall F-statistic, which has a p-value greater than 0.05. Therefore, we can conclude that the seasonal means are not statistically different from zero and we do not have to de-season our data. 
+  
+  + I also calculate the mean for this detrended series, and subtract this to compute the demeaned series for the Case Shiller house price data.
+  
+  + This means the residuals reflect the detrended, demeaned and seasonally adjusted series for the Case Shiller house prices data. Chart 3 visualises this series.
+
+
+<br>
+
+``` {r aii}
+
+################################################################################
+################### SPECIFYING DETERMINISTIC TRENDS ############################
+################################################################################
+
+################# GENERATING TREND COMPONENT OF TIME SERIES ####################
+
+data <- data %>% 
+  filter(date < as.Date("2019-01-01")) 
+
+data <- data %>% 
+  mutate(
+    
+    time = seq(1,length(data$price_level)),
+    time_square = time^2,
+    hits_log = log(price_level)
+    
+  )
+
+
+# ESTIMATING MODELS
+
+
+# Linear model
+
+price_model_linear <- lm(price_level ~ time, data = data)
+
+#Quadratic model
+
+price_model_quadratic <- lm(price_level ~ time + time_square, data = data)
+
+#Exponential model
+
+price_model_exponential_descaled <- nls(price_level ~ a*exp(b*time), start = list(a=8000, b = 0.01), data = data)
+
+
+# EXTRACTING MODEL FITS
+
+data <- data %>% 
+  mutate(
+    
+    linear_model = predict(price_model_linear),
+    
+    quadratic_model = predict(price_model_quadratic),
+    
+    exponential_model = predict(price_model_exponential_descaled)
+    
+  )
+
+
+ggplot(data, aes(x = date)) + 
+  geom_line(aes(y = price_level, colour = "Data")) +
+  geom_line(aes(y = linear_model, colour = "Linear")) + 
+  geom_line(aes(y = quadratic_model, colour = "Quadratic")) + 
+  geom_line(aes(y = exponential_model, colour = "Exponential")) + 
+  scale_color_manual(values = c("Data"= "black" ,"Linear" = "blue", "Quadratic" = "red", "Exponential" = "green")) +
+  labs(colour = "Model") +
+  labs(x = "Date", y = "Index", caption = "Source: S&P CoreLogic, Case-Shiller Home Price Index & author's calculations.") + 
+  ggtitle("Chart 2: US home price index with deterministic trend fits") +
+    theme(plot.caption = element_text(hjust = 0))
+
+# COMPARING MODEL OUTPUTS
+
+model_list <- list(price_model_linear, price_model_quadratic, price_model_exponential_descaled)
+
+model_names <- c("price_model_linear", "price_model_quadratic", "price_model_exponential_descaled")
+
+extract_criteria <- function(model, model_name) {
+  summary_data <- summary(model)
+  aic <- AIC(model)
+  bic <- BIC(model)
+  return(data.frame(Model = model_name, AIC = aic, BIC = bic))
+}
+
+model_selection_criteria <- map2_df(model_list, model_names, extract_criteria) %>% 
+  arrange(AIC)
+
+print(model_selection_criteria)
+
+# Linear model returns the lowest AIC/BIC. Therefore use this as the trend series.
+
+# Need to generate the detrended series to test for seasonal effects
+
+data <- data %>% 
+  mutate(
+    
+    detrended = resid(price_model_linear)
+    
+  )
+
+
+################# GENERATING SEASONAL COMPONENT OF TIME SERIES #################
+
+
+
+data <- data %>% 
+  mutate(month = month(date)) %>% 
+  mutate(
+    
+    jan_dummy = case_when(month == 1 ~ 1, TRUE ~ 0),
+    feb_dummy = case_when(month == 2 ~ 1, TRUE ~ 0),
+    mar_dummy = case_when(month == 3 ~ 1, TRUE ~ 0),
+    apr_dummy = case_when(month == 4 ~ 1, TRUE ~ 0),
+    may_dummy = case_when(month == 5 ~ 1, TRUE ~ 0),
+    jun_dummy = case_when(month == 6 ~ 1, TRUE ~ 0),
+    jul_dummy = case_when(month == 7 ~ 1, TRUE ~ 0),
+    aug_dummy = case_when(month == 8 ~ 1, TRUE ~ 0),
+    sep_dummy = case_when(month == 9 ~ 1, TRUE ~ 0),
+    oct_dummy = case_when(month == 10 ~ 1, TRUE ~ 0),
+    nov_dummy = case_when(month == 11~ 1, TRUE ~ 0),
+    dec_dummy = case_when(month == 12 ~ 1, TRUE ~ 0),
+
+    
+  )
+
+seasonal_model <- lm(detrended ~ 0 + jan_dummy + feb_dummy + mar_dummy + 
+                       apr_dummy + may_dummy + jun_dummy + 
+                       jul_dummy + aug_dummy + sep_dummy +
+                       oct_dummy + nov_dummy + dec_dummy, 
+                     data = data)
+
+
+summary(seasonal_model)
+
+
+################# GENERATING THE MEAN OF THE TIME SERIES #######################
+
+data <- data %>% 
+  mutate(
+    
+    mean = mean(detrended),
+    
+    demeaned = detrended - mean
+    
+  )
+
+
+
+
+ggplot(data, aes(x = date)) + 
+  geom_line(aes(y =  demeaned)) + 
+  labs(x = "Date", y = "Index", caption = "Source: S&P CoreLogic, Case-Shiller Home Price Index & author's calculations.") + 
+  ggtitle("Chart 3: Detrended, demeaned and seasonally adjusted series of  \n US home price index") +
+  theme(plot.caption = element_text(hjust = 0))
+
+
+```
+
+
+<br>
+
+
+* Now we are ready to conduct the Augmented Dicky-Fuller (ADF) test:
+
+  + I first set the maximum number of potential lags for our ADF test using the Ng & Perron (1995) testing procedure (i.e. kmax). 
+  
+  + Then, we perform the ADF test iteratively, starting at kmax, and checking he absolutely value of th t-statitic associated with the coefficient on the last lagged difference. If the t-statistic is greater than 1.6 in absolute value, we we set the number of lags to kmax
+
+
+
+
+``` {r aiii}
+
+################################################################################
+############################# ADF TEST #########################################
+################################################################################
+
+#################### SPECIFYING THE NUMBER OF ADF LAGS #########################
+
+# SETTING KMAX
+
+T <- length(data$demeaned)
+
+kmax <- ceiling(12*(T/100)^1/4)
+
+
+
+# SPECIYING ADF TEST
+
+for (i in 1:kmax-1){
+
+  k = kmax+1-i    
+
+  df.data = ur.df(data$demeaned, type = "none", lags = k)
+
+  tstat = df.data@testreg$coefficients[k+1,3]
+
+  if(abs(tstat) >= 1.6){break}
+}
+
+k
+
+summary(df.data)
+
+test_data <- data %>% 
+  pull(demeaned) %>% 
+  ts(start = c(1987,1), frequency = 12)
+
+test_model <- auto.arima(test_data)
+
+summary(test_model)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+## b) Using the data from January 1987 to December 2018, identify an estimate an approprite time series model. Make sure to report all relevant estimation results, plots, statistical tests and information criteria that you are relying on in determining your preferred model.
+
+```{r b}
+
+
+```
+
+## c) Using your estimation results from part b, compute and plot appropriate point and interval forecasts for the period spanning January 2019 to January 2022. Do the forecasts perform well when compared to the actual realisations? Why or why not?
+
+```{r c}
+
+
+```

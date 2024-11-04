@@ -1,0 +1,8 @@
+variable,mean,sd,min,max
+depression_dummy,0.31,0.46,0,     1
+drinking_source_distance,9658.32,59913.2,0,800000
+sewerage_exposure_dummy,0.33,0.47,0,     1
+sex_dummy,0.55,0.5,0,     1
+age,39.06,18.73,1,   109
+not_christian_dummy,0.34,0.47,0,     1
+ethnic_minority_dummy,0.46,0.5,0,     1

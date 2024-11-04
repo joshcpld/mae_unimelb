@@ -1,0 +1,619 @@
+---
+title: "ECOM90024 - Assignment 3 - Question 1"
+author: "Josh Copeland"
+date: "2024-05-22"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+library(lubridate)
+library(forecast)
+library(urca)
+library(tseries)
+library(rugarch)
+library(janitor)
+
+theme_set(theme_minimal())
+
+```
+```{r setup_text}
+
+# Packages used for this assignment
+ 
+# library(tidyverse)
+# library(lubridate)
+# library(forecast)
+# library(urca)
+# library(tseries)
+# library(rugarch)
+# library(janitor)
+
+```
+
+
+## a) Using the Case Shiller housing price data from Assignment 2, test for the presence of a unit root using an appropriate Augmented Dicky Fuller and determine the order of integration.
+
+
+Before testing for a unit root, I first need to generate the demeaned, detrended and seasonally adjusted series. We can infer if its reasonable to assume any OLS deterministic trends by looking at Chart 1. It tells me that it is not appropriate to apply any OLS deterministic trends or seasonality to this data:
+
+ * Although there is an upwards trend to the data, the clear cyclical fluctuations in this series are so intense that it makes it difficult to fit any functional form to it. Furthermore, we are only estimating our time series model up to the end of 2018, and we can see there is a very significant acceleration in the growth of this series from 2020 onwards. It would therefore not make sense to apply any such trend, as its clear the data generating process changed significantly after this period, which would make whatever deterministic trend a very poor out of sample fit.
+ 
+ * I do not see any clear evidence of persistent seasonal effects in this data. There are some short-term fluctuations at different parts of the history, but these are inconsistent in both their timing and magnitude. Therefore, an OLS method could not effectively deal with these fluctuations, even if they might be seasonal in nature.
+ 
+Therefore, given we are not amending this data for seasonal or trend effects, simply demeaning it will give us the cyclical series we will be creating a time series model for.
+
+``` {r ai}
+
+data <- read_csv("csindex.csv") %>% 
+  select(date = DATE, price_level = CSUSHPISA) %>% 
+  mutate(date = dmy(date)) %>% 
+  na.omit()
+
+
+ggplot(data, aes(x = date, y = price_level)) + 
+  geom_line() + 
+  ggtitle("Chart 1: Price level of existing single family-homes in the US from January 1987 to December 2022") +
+  labs( x = "Date", 
+        y = "Index", 
+        caption = "Source: S&P CoreLogic, Case-Shiller Home Price Index.") + 
+  theme(plot.title = element_text(size = 10),
+        plot.caption = element_text(hjust = 0))
+
+
+#################### GENERATING  CYCLICAL SERIES ###############################
+
+data <- data %>% 
+  mutate(mean = mean(price_level)) %>% 
+  mutate(demeaned = price_level - mean) %>% 
+  select(date, price_level, mean, cyclical = demeaned) %>% 
+  filter(date < "2019-01-01")
+
+
+```
+
+<br>
+
+Now we are ready to conduct the Augmented Dicky-Fuller (ADF) test:
+
+ * First, I set the maximum number of potential lags for our ADF test (kmax) using the Ng & Perron (1995) testing procedure. For our data, this is equal to 17 lags.
+ 
+  * I then perform the ADF test iteratively, starting with the numbers of lags suggested by kmax. If the t-statistic associated with the coefficient estimated on the last lagged difference is greater than 1.6 in absolute value then we use this number of lags. If not, then we continue reducing the number of lags by one until this occurs. I have used a loop to automate this process.
+  
+ * As this cyclical series reflects the demeaned, detrended and seasonally adjusted series, we use the "none" option (Model 1) or our ADF test, as we've already accounted for the trend and drift term within the price level.
+  
+ * Using 13 lags we conduct the ADF test on the level of our cyclical series and extract a test statistic of -1.1345. This is larger than all of the relevant critical values. Therefore fail to reject the null hypothesis of there being a unit root in this series, meaning we must difference the data and test again.
+   
+ * Using 17 lags, we conduct the ADF test on the differenced cyclical series and extract a test statistic of -2.716. This is larger than all of the given critical values in our test. Therefore reject the null hypothesis of there being a unit root in the differenced series at any reasonable significance level.
+    
+ * Therefore, we conclude this series is integrated order 1 (I(1)).
+
+``` {r aii}
+
+
+################################################################################
+############################# ADF TEST #########################################
+################################################################################
+
+#################### SPECIFYING THE NUMBER OF ADF LAGS #########################
+
+# SETTING KMAX
+
+kmax <- ceiling(12*(length(data$cyclical)/100)^(1/4))
+
+
+############################## ADF TEST ON LEVEL SERIES ########################
+
+for (i in 1:(kmax-1)){
+
+  k = kmax+1-i   
+
+  df_data_level = ur.df(data$cyclical, type = "none", lags = k)
+
+  tstat = df_data_level@testreg$coefficients[k+1,3]
+
+  if(abs(tstat) >= 1.6){break}
+
+}
+
+k
+
+# SUMMARY OF ADF TEST
+
+summary(df_data_level)
+
+
+############################## ADF TEST ON DIFF SERIES ########################
+
+for (i in 1:(kmax-1)){
+
+  k = kmax+1-i   
+
+  df_data_diff = ur.df(diff(data$cyclical), type = "none", lags = k)
+
+  tstat = df_data_diff@testreg$coefficients[k+1,3]
+
+  if(abs(tstat) >= 1.6){break}
+
+}
+
+k
+
+# SUMMARY OF ADF TEST
+
+summary(df_data_diff)
+
+
+```
+
+## b) Using the data from January 1987 to December 2018, identify an estimate an approprite time series model. Make sure to report all relevant estimation results, plots, statistical tests and information criteria that you are relying on in determining your preferred model. (2 Marks)
+
+<br>
+
+As we have already determined the OLS components of our forecast (i.e. none) we first need to confirm our cyclical series is not white noise. If it is, then we cannot use an ARMA process to usefully model its conditional mean.
+
+After conducting the portmanteau Box-Pierce and Ljung-Box tests, we can verify this differenced demeaned data is not white noise. This is because both tests return a very small p-value, rejecting the null hypothesis of both tests that there is no autocorrelation in the time series up to lag m (32). This implies dependence in this time series, suitable for ARMA modelling.
+
+<br>
+
+```{r bi}
+
+
+############################# PORTMANTEAU TESTS ################################
+
+m = ceiling((sqrt(length(data$price_level))))
+
+m
+
+Box.test(diff(data$price_level), lag = m, type = "Box-Pierce")
+
+Box.test(diff(data$price_level), lag = m, type = "Ljung-Box")
+
+
+```
+
+
+
+<br>
+
+We then need to generate the ACF and PACF of our cyclical series to get a sense of their dependence. When doing this, we need to use the differenced series as it is I(1), and it is the differenced data we are creating a time series model for.
+
+ * Chart 3 shows the sample autocorrelation function (ACF) for the differenced demeaned US home price index for the 1st to the 20th lag. It shows there are significant lags up to lag 18.
+
+ * Chart 4 shows the sample partial autocorrelation function (PACF) for the differenced demeaned US home price index from the 1st to the 20th lag.There are significant lags up until lag 13.
+ 
+ * Based of this information, this tells us that when choosing an ARIMA(p,d,q), we should search for a model with a p parameter up to order 18. We need a minimum value of 1 because we need to account for dependency in our model (ie. we know this isn't a white noise process). We will search for a model with a q parameter up to 4 given it's not advisable we have any more than 4 MA terms in our ARIMA model. 
+
+```{r bii}
+
+############ ANALYSING DEPENDENCE STRUCTURE OF DATA ############################
+
+acf <- acf(diff(data$cyclical), plot = FALSE)
+pacf <- pacf(diff(data$cyclical), plot = FALSE)
+
+plot(acf[1:20], main = "Chart 3: Sample ACF for the differenced US home price index series")
+plot(pacf[1:20], main = "Chart 4: Sample PACF for the differenced US home price index series")
+
+
+
+```
+
+
+<br>
+
+Now we need to generate a range of ARMA(p,d,q) models and choose the preferred model using AIC/BIC.
+
+ * Using our observations from above, we will search for models with parameters ranges of AR(1) - AR(15) and MA(0) - MA(4). We need to use at least 1 AR term to account for the persistence we know exists in our conditional mean equation.
+ 
+  * We then use the auto.arima() function to search for the best ARIMA model available to us for this data, using our ARIMA(p,d,q) parameter ranges above to constrain its search. We also complete two calls of auto.arima() to generate a preference from both AIC and BIC.
+  
+  * AIC and BIC prefer different models: ARIMA(3,1,2) and ARIMA(1,1,2) respectively. Given this conflict, we will take the more parsimonious option given by BIC as our preferred model: ARIMA(1,1,2).
+  
+  * After generating this preferred model, we do some basic diagnostics on it:
+    
+    + Chart 5 indicates the roots of the lag polynominal of this model are all well within the unit circle, suggesting we have accounted for any units roots in the time series effectively.
+    
+    + Chart 6 shows the residuals. Unfortunately these do not look like white noise. It may be possible ARCH effects exist in this process.
+ 
+ 
+```{r biii}
+
+############ ANALYSING DEPENDENCE STRUCTURE OF DATA ############################
+
+aic_best_model <- auto.arima(data$price_level,
+                         
+                         #Parameter values
+                         
+                         start.p = 1,
+                         max.p = 18,
+                         max.d = 1,
+                         max.q = 4,
+                         
+                         #Other options
+                         stepwise = FALSE, #To ensure an exhaustive search
+                         ic = "aic"
+                         
+                         )
+
+summary(aic_best_model)
+
+bic_best_model <- auto.arima(data$price_level,
+                         
+                         #Parameter values
+                         
+                         start.p = 1,
+                         max.p = 15,
+                         max.d = 1,
+                         max.q = 4,
+                         
+                         #Other options
+                         stepwise = FALSE, #To ensure an exhaustive search
+                         ic = "bic"
+                         
+                         )
+
+summary(bic_best_model)
+
+# AIC chooses ARIMA(3,1,2) whereas BIC chooses ARIMA(1,1,2). We will use the more parsimonious model, as specified by BIC.
+
+mean_eqn <- Arima(data$price_level,
+                     order = c(1,1,2),
+                     include.mean = FALSE,
+                     method = "CSS-ML",
+                     xreg = data$mean)
+
+
+
+####################### TESTING GENERAL MODEL DIAGNOSTICS ######################
+
+autoplot(mean_eqn, main = "Chart 5: Estimated roots of the ARIMA(1,1,2) lag polynomial")
+
+mean_eqn_res <- mean_eqn$resid
+
+plot(mean_eqn_res, main = "Chart 6: Residuals of ARIMA(1,1,2) model")
+
+```
+
+
+<br>
+
+Given this observation of the residuals, we now need to test for ARCH effects in these residuals to assess if its appropriate to create a model for the conditional variance of this series.
+
+ * Chart 7 and Chart 8 show the ACF and PACF of the squared residuals from our conditional mean equation respectively. They show the presence of several signficant lags, suggesting ARCH effects are present.
+ 
+ * This is confirmed by our portmanteau tests on these squared residuals. Their very small p-values means we reject the null hypothesis that these squared residuals are white noise, telling us there is dependence in them.
+ 
+ * This means these residuals are suitable for ARCH modelling.
+ 
+ 
+```{r biv}
+
+############################# TESTING FOR ARCH EFFECTS #########################
+
+mean_eqn_res_sq <- mean_eqn_res^2
+
+acf.res <- acf(mean_eqn_res_sq, plot = FALSE)
+pacf.res <- pacf(mean_eqn_res_sq, plot = FALSE)
+
+plot(acf.res[1:20], main = "Chart 7: ACF of squared residuals from ARIMA(1,1,2) model")
+
+plot(pacf.res[1:20], main = "Chart 8: PACF of squared residuals from ARIMA(1,1,2) model")
+
+# There are many significant lags in the ACF and PACF, therefore adding an ARCH variance to this model would likely improve model fit.
+
+# This is confirmed by our portmanteau tests below, which tell us the squared residuals are indeed not white noise.
+
+
+Box.test(mean_eqn_res_sq, type = "Box-Pierce", l = m)
+Box.test(mean_eqn_res_sq, type = "Ljung-Box", l = m)
+
+```
+
+
+<br>
+
+Now we need to estimate our ARCH model:
+
+ * From Chart 7, we can see there are significant ACF lags in the squared residuals up to lag 15. Therefore, we will test for models with ARCH terms up to order 15. Please note, estimating all of these models added dozens of pages to the printout for my submission. I have removed most of them from this pdf for brevity.
+ 
+ * Using AIC/BIC we determine our preferred model, where both measures give different results: ARCH(13) and ARCH(12) respectively. We will go with the more parsimonious ARCH(12) from the BIC.
+ 
+ * After estimating this model, we assess if our estimation is sufficient. We conclude it is because:
+   
+  + The residuals now look much more like white noise (Chart 9)
+  
+  + Our portmanteau tests both return large p-values (both > 0.05), meaning we cannot reject the null hypothesis the standardised squared residuals from this ARCH(12) model are white noise. This confirms the ARCH effects have been dealt with in this model.
+  
+* However, for completeness, we check if a more parsimonious GARCH(1,1) sufficiently arrives at the same solution. We don't find this is the case, as the portmanteau tests on those standardised square residuals both return very small p-values. This means we reject the null hypothesis that this series is white noise, and conclude it has not dealt effectively with the ARCH effects present in the squared residuals. Therefore, we stay with our ARCH(13) model.
+
+
+<br>
+
+Ultimately, after all this analysis, we settle on an ARIMA(1,1,2)-ARCH(12) model as our preferred model for forecasting the cyclical components of our time series.
+  
+<br>
+ 
+
+```{r bv}
+
+########################### ESTIMATING ARCH MODELS #############################
+
+z = 15
+
+prefix.arch <- "arch"
+suffix.arch <- seq(1,z)
+
+arch.label <- paste(prefix.arch, suffix.arch, sep = "" )
+
+arch.info <- data.frame(row.names = arch.label, matrix(NA,z,2))
+
+colnames(arch.info) <- c("aic","bic") 
+
+T <- length(mean_eqn_res)
+
+for(i in 1:z){
+archmod <- garch(mean_eqn_res, order = c(0,i))
+arch.info[i,1] <- AIC(archmod)
+arch.info[i,2] <- AIC(archmod, k = log(T-i-1))
+}
+
+akaike.choice <- rownames(arch.info)[which.min(arch.info[,1])]
+bayes.choice <- rownames(arch.info)[which.min(arch.info[,2])]
+
+akaike.choice
+bayes.choice
+
+
+########################## REXAMINING RESIDUALS ################################
+
+
+archmod <- garch(mean_eqn_res, order = c(0,12))
+
+archmod.res <- archmod$residuals
+
+archmod.res <- na.omit(archmod.res)
+
+plot(archmod.res, col = "red", main = "Chart 9: Standardised Residuals from ARCH(12) Equation", type = "l")
+
+archmod.ressq <- archmod.res^2
+
+plot(archmod.ressq, col = "darkorchid", main = "Chart 10: Squared Standardised Residuals from ARCH(12) Equation", type = "l")
+
+######################## VERIFYING IF ARCH EFFECTS ARE GONE ####################
+
+Box.test(archmod.ressq, lag = m, type = "Box-Pierce")
+
+Box.test(archmod.ressq, lag = m, type = "Ljung-Box")
+
+
+########### TESTING IF A GARCH(1,1) MODEL GIVES SIMILAR RESULTS ################
+
+garchmod <- garch(mean_eqn_res, order = c(1,1))
+
+garchmod.res <- garchmod$residuals
+
+garchmod.res <- na.omit(garchmod.res)
+
+garchmod.ressq <- garchmod.res^2
+
+plot(garchmod.res, col = "red", main = "Chart 8: Standardised Residuals from GARCH(1,1) Equation", type = "l")
+
+plot(garchmod.ressq, col ="darkorchid", main = "Chart 9: Squared Standardised Residuals from GARCH(1,1) Equation", type = "l")
+
+Box.test(garchmod.ressq, lag = m, type = "Box-Pierce")
+
+Box.test(garchmod.ressq, lag = m, type = "Ljung-Box")
+
+# The GARCH(1,1) model fails to remove ARCH effects from the squared residuals!
+
+
+################################# CREATING FINAL MODEL #########################
+
+
+# My chosen model for this time series if an ARIMA(1,1,2)-ARCH(12) model.
+
+# rugarch cannot handle differencing the data so we need to do this ourselves and then re-integrate after deriving forecasts
+
+cyclical_diff <- diff(data$cyclical)
+
+final_model <- ugarchspec(
+  
+  variance.model = list(model ="sGARCH", garchOrder = c(12,0)),
+  
+  mean.model = list(armaOrder = c(1,2), include.mean = TRUE),
+  
+  distribution.model = "norm"
+  
+)
+
+``` 
+
+<br>
+
+## c) Using your estimation results from part b, as well as the forecast developed for Assignment 2, compute and plot appropriate point and interval forecasts for the period spanning January 2019 to January 2022. Do the forecasts perform well when compared to the actual realisations? Why or why not? Compare the forecasts using RMSE and MAE metrics.
+
+<br>
+
+The code snippet below extracts a our ARIMA(1,1,2)-ARCH(12) forecast from our preferred model, re-integrates the data and also adds back in the mean term to produce our final time series point estimate and interval forecast. It also charts the forecast we produced in Assignment 2 using our ARMA(13,3) model with a deterministic trend. Chart 10 shows the forecasts of both models and their intervals relative to actuals.
+
+Before commenting on the overall efficacy of these forecasts, first some observations on comparing the two forecasts:
+
+ * Firstly, the old forecast is wavy rather than straight. This suggests there is some kind of complex root in the estimated process (ARMA(13,3)) we used to forecast this series in Assignment 2. The fact this is no longer the case in our new forecasts suggest we have appropriately dealt with the unit roots present in this time series.
+ 
+ * Secondly, the prediction intervals for the new model we have generated are notably wider than the ARMA model. This is due to the fact we have modelled a conditional variance, where its time varying nature means prediction intervals must accomodate the possibility of future higher volatility, and are hence wider then a typical ARMA model.
+ 
+ * Thirdly, by looking at our RMSE and MAE metrics, we can see that overall the out of sample fit for the old model is actually better as the old model produces lower values for both to these metrics. While this certainly suggests the old model is preferable, given what we know about the prior model (i.e. not accounting for a unit root), we should treat such perceived preference with skepticism. The COVID-19 pandemic clearly had a massive impact on the underlying data generating process, which no covariance stationary modelling framework could effectively capture. I don't think it is reasonable to say that a certain model is "better" using empirical metrics when there are clearly major theoretical flaws underpinning its construction, as is the case with the old model.
+ 
+Finally, it is important to point out both of these models perform very poorly relative to the actuals from 2019-01-01 to 2022-01-01. I think there are two key reasons for this:
+
+ * The first is the incidence of the COVID-19 pandemic, and what limitation of using the exclusively the past history of a variable to forecast its future. The COVID-19 pandemic represented a once in a century level of disruption to the global economy, from which it is still recovering from. This is a problem because of how we use covariance stationary assumptions to forecast time series data. We use this assumption because conceptually, you can only effectively forecast a time series if its history is well behaved and predictable. The COVID-19 pandemic was such an enormous shock, that it would be unreasonable to expect that the time series forecasting techniques we have learnt thus far could be used to forecast its impact. The pandemic experience was so far removed from historical conditions that it's unsurprising the model performs poorly. 
+ 
+ * Somewhat related to this point, another limitation is the fact that both of these models are univariate. Modelling house prices is inherently complex as they are asymmetrically impacted by a wide range of different economic variables (such as the monetary policy stance, growth in household wealth or sentiment, etc). By limiting our forecasting model of house prices to use exclusively the past history of house prices, we are unable to account for the impact of any significant changes in economic variables that are know to have a strong impact on house prices.
+
+
+```{r ci}
+
+################################################################################
+############################### FORECASTING DATA ###############################
+################################################################################
+
+############################# CREATING FORECASTING DATA ########################
+
+data_fc <- read_csv("csindex.csv") %>% 
+  select(date = DATE, price_level = CSUSHPISA) %>% 
+  mutate(date = dmy(date)) %>% 
+  na.omit() 
+  
+data_fc <- data_fc  %>% 
+  filter(date >= as.Date("2019-01-01") & date < as.Date("2022-02-01")) 
+
+
+
+#Set number of forecast intervals based in forecast data
+
+forecast_intervals <- length(data_fc$date) 
+  
+
+
+
+############################# FORECASTING VALUES ###############################
+
+final_model_forecast_fit_diff <- ugarchfit(spec = final_model, data = cyclical_diff)
+
+final_model_forecast_diff <- ugarchforecast(final_model_forecast_fit_diff, n.ahead = forecast_intervals)
+
+
+
+
+########################### EXTRACTING FORECASTS ###############################
+
+
+
+#CYCLICAL
+
+cond_mean_forecast <- data.frame(final_model_forecast_diff@forecast$seriesFor) %>%  clean_names() %>% 
+  select(cond_mean = x1971_01_19) %>% 
+  mutate(cond_mean_cumsum = cumsum(cond_mean)) %>% 
+  select(cond_mean = cond_mean_cumsum)
+  
+cond_var_forecast <- data.frame(final_model_forecast_diff@forecast$sigmaFor) %>% 
+  clean_names() %>% 
+  select(cond_var = x1971_01_19) %>%
+    mutate(upper_interval = cond_var * 1.96) %>% 
+  mutate(lower_interval = cond_var * -1.96) %>% 
+  mutate(
+    
+    upper_cumsum = cumsum(upper_interval),
+    lower_cumsum = cumsum(lower_interval),
+    
+    ) %>% 
+  select(upper_forecast_interval = upper_cumsum, lower_forecast_interval = lower_cumsum)
+
+garch_forecast <- cond_mean_forecast %>% 
+  cbind(cond_var_forecast) 
+
+
+# Re-integrate cyclical forecasts into final time series forecast
+
+
+mean <- mean(data$mean) # mean series to create final time series
+
+last_value <- tail(data,1) %>% 
+  pull(cyclical)
+
+garch_forecast <- garch_forecast %>% 
+  mutate(cond_mean = cond_mean + last_value) %>% 
+  mutate(
+    
+    upper_forecast_interval = upper_forecast_interval + last_value,
+    lower_forecast_interval = lower_forecast_interval + last_value,
+    
+         ) %>% 
+
+  select(new_point_estimate = cond_mean, new_high_prediction_interval = upper_forecast_interval,
+         new_low_prediction_interval = lower_forecast_interval) %>% 
+  mutate_all(~ . + mean)
+
+
+######################## START COMPILING FINAL DATA FRAME ######################
+
+
+data_fc <- data_fc %>% 
+  bind_cols(garch_forecast)
+
+
+
+############################## IMPORTING ASSIGNEMNT 2 FORECAST #################
+
+
+old_forecast <- read_csv("data_final.csv") %>% 
+  mutate(date = dmy(date)) %>% 
+  select(-price_level)
+
+
+############################## FINAL DATAFRAME #################################
+
+data_final <- data_fc %>% 
+  left_join(old_forecast, by = "date") %>% 
+  bind_rows(data)
+
+
+############################## CHARTING RESULTS ################################
+
+ggplot(data_final, aes(x = date)) +
+  geom_line(aes(y = price_level)) + 
+  
+  # Old forecast
+  
+  geom_line(aes(y = old_point_estimate, colour = "Old forecast")) + 
+  geom_line(aes(y = old_high_prediction_interval, colour = "Old forecast"), linetype = "dashed") +
+  geom_line(aes(y = old_low_prediction_interval, colour = "Old forecast"), linetype = "dashed") +
+  
+  # New forecast
+  
+    geom_line(aes(y = new_point_estimate, colour = "New forecast")) + 
+  geom_line(aes(y = new_high_prediction_interval, colour = "New forecast"), linetype = "dashed") +
+  geom_line(aes(y = new_low_prediction_interval, colour = "New forecast"), linetype = "dashed") +
+  
+  scale_colour_manual(name = "Forecast type",
+                      values = c("Old forecast" = "red", "New forecast" = "blue")) + 
+  
+  ggtitle("Chart 10: Price level existing family homes in the USE from January 1987 to January 2022 \n with old (ARMA(13,3) & deterministic trend) and new (ARIMA(1,1,2)-ARCH(12) and mean)") +
+  
+    theme(plot.title = element_text(size = 10),
+        plot.caption = element_text(hjust = 0),
+        legend.position = c(0.05, 0.90),
+        legend.justification = c(0, 1))
+
+############################## FORMALLY COMPARING FORECASTS ####################
+
+forecast_metric_data <- data_final %>% 
+  select(date,price_level, old_point_estimate, new_point_estimate) %>% 
+  na.omit()
+
+
+# CALCULATE RMSE
+
+rmse_old <- sqrt(mean((forecast_metric_data$price_level - forecast_metric_data$old_point_estimate)^2))
+
+rmse_new <- sqrt(mean((forecast_metric_data$price_level - forecast_metric_data$new_point_estimate)^2))
+
+rmse_old
+
+rmse_new
+
+
+# CALCULATE MAE
+
+mae_old <- mean(abs(forecast_metric_data$price_level - forecast_metric_data$old_point_estimate))
+
+mae_new <- mean(abs(forecast_metric_data$price_level - forecast_metric_data$new_point_estimate))
+
+mae_old
+
+mae_new
+
+``` 
+
+

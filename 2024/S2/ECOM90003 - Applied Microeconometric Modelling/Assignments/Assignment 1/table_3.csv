@@ -1,0 +1,19 @@
+="Table 3. Intensity of School Construction"
+
+="",="(1)",="(2)",="(3)"
+="",="There is a primary health center in the village",="There are doctors in the village",="There is access to safe drinking water in the village"
+
+="post92",="-0.017***",="-0.006",="-0.017**"
+="",="(0.004)",="(0.005)",="(0.007)"
+
+="post92=1 # num_PSINPRES1980=1",="0.013***",="0.009*",="0.010"
+="",="(0.005)",="(0.005)",="(0.009)"
+
+="post92=1 # num_PSINPRES1980=2",="0.024***",="0.011",="0.036**"
+="",="(0.006)",="(0.007)",="(0.014)"
+
+="R-squared",="0.837",="0.820",="0.923"
+="Observations",="59130",="59130",="39420"
+
+="Standard errors in parentheses"
+="* p<0.1, ** p<0.05, *** p<0.01"

@@ -1,0 +1,333 @@
+---
+title: "Week 12 Tutorial"
+author: 'Josh Copeland'
+subtitle: 'ECON90033 - 2023 Semester 2 '
+date: "Completed on 22 October 2023"
+
+
+output: 
+  html_document:
+  theme: journal
+---
+
+```{r setup, include = FALSE}
+
+library(tidyverse)
+library(readxl)
+library(lubridate)
+library(forecast)
+library(knitr)
+library(vars)
+library(bruceR)
+library(urca)
+library(aTSA)
+
+```
+
+## Exercise 1
+
+### a) Import the data, graph and interpret it.
+
+It's clear both series are non-stationary, but they follow similar time paths and therefore may share a common stochastic trend.
+
+However, the differenced series do not contain trends. Therefore, their means might be stationary.
+
+```{r e1a, include = TRUE}
+
+e1 <- read_excel("C:/Users/joshc/Documents/2023S2/ECON90033/Tutorials/Week 12/t12e1.xlsx", sheet = "Data")
+
+TB3 <- e1 %>% 
+  pull(TB3) %>% 
+  ts(start = c(1949, 12), end = c(2023,9), frequency = 12)
+
+DTB3 <- diff(TB3)
+
+
+
+AAA <- e1 %>% 
+  pull(AAA) %>% 
+  ts(start = c(1949, 12), end = c(2023,9), frequency = 12)
+
+DAAA <- diff(AAA)
+
+
+plot.ts(TB3, ylab = "TB3, AAA", main = "Treasury Bill rate and AAA bond yield",
+col = "red")
+lines(AAA, col = "darkblue", lty = 2)
+legend("topright", legend = c("TB3", "AAA"),
+col = c("red", "darkblue"), lty = 1:2, cex = 0.8)
+
+
+plot.ts(DTB3, ylab = "DTB3, DAAA", main = "First differences of Treasury Bill rate
+and AAA bond yield", col = "red")
+lines(DAAA, col = "darkblue")
+legend("bottomright", legend = c("DTB3", "DAAA"),
+col = c("red", "darkblue"), lty = 1:2, cex = 0.8)
+
+```
+
+
+### To confirm these observations above, perform the ADF and kPSS tests on the levels and first differences of TB3 and AAA.
+
+Based on the plots, the data generating plots certainly don't have a single linear trend component. It might have a broke nlinear trend components. For this reason you need to conduct tests with both an intercept (Model 2) and both an intercept and a trend (Model 3) for the level series. For the differenced series we use Model 2.
+
+We don't discuss the output in detail, but they show that both variables are integrated of order 1 (i.e. I(1)) no matter of the significance level is 10% or 5%.
+
+```{r e1b, include = TRUE}
+
+# DF test
+#library(urca)
+adf.TB3 = ur.df(TB3, type = "drift", selectlags = "BIC")
+summary(adf.TB3)
+adf.DTB3 = ur.df(diff(TB3), type = "none", selectlags = "BIC")
+summary(adf.DTB3)
+adf.AAA = ur.df(AAA, type = "drift", selectlags = "BIC")
+summary(adf.AAA)
+adf.DAAA = ur.df(diff(AAA), type = "none", selectlags = "BIC")
+summary(adf.DAAA)
+
+
+kpss.TB3 = ur.kpss(TB3, type = "mu")
+summary(kpss.TB3)
+kpss.DTB3 = ur.kpss(diff(TB3), type = "mu")
+summary(kpss.DTB3)
+kpss.AAA = ur.kpss(AAA, type = "mu")
+summary(kpss.AAA)
+kpss.DAAA = ur.kpss(diff(AAA), type = "mu")
+summary(kpss.DAAA)
+
+```
+
+
+### Since TB3 and AAA are both I(1) they might be cointegrated. Check this possibility by performing cointegration tests.
+
+There are several tests to consider:
+
+* Engle-Granger (EG) 
+
+  - Basically an ADF-type test on the residuals from a simple linear regression of TB3 on AAA (or vice versa) but with different critical values.
+
+  - EG tests do this and test under the null hypothesis of two or more series being not cointegrated.
+  - Since the results can be sensitive to normalisation (i.e. choice of Y), best practice is to run the test twice.
+  
+* Interpreting EG test output:
+
+  - Each printout has three panels, corresponding to the three possibl especifications of the ADF test regressions: Model 1, Model 2 and Model 3. We are using model 1 in this instance.
+  
+  - Comparing the models to eachother you can see the normalistaion does matter as the t-value vary significantly between printouts - which also leads to different p-values. However, in both cases the null hypothesis of no cointegration can be rejected at the 2% significance level, implying that they are CI(1,1).
+  
+  
+```{r e1ci, include = TRUE}
+
+# EG test
+
+# library(aTSA)
+
+coint.test(TB3,AAA)
+coint.test(AAA,TB3)
+
+
+```
+
+
+* Johansen tests:
+
+  - The tricky part of using Johansen tests is knowing which deterministic assumptions to apply: "none" (no deterministic term in EC but a constant outside EC), "const" (a constant in the EC, but no deterministic term outside the EC), or "trend" (a trend variables but no constant in EC and a constant outside EC).
+  
+  - Use the following approach for choosing the right term:
+    + "none" is appropriate for (linearly) trending series, granted all trends are stochastic.
+    + "const" is proper only if none of the variables appear to have a sustained tendency to increase or decrease.
+    + "trend" is reasomable when there is some long-run linear growth that the cointegrating relation does not account for.
+    
+    
+Because neither TB3 and AAA are trending linearly, but seem to have some broken trend, "const" is a reasonable option.
+
+For lag length in this model, we use the VARselect() function. SC selects lag length 3, whereas all other measures select lag length 10.
+
+To determine what's correct, estimate VAR(3) and perform the BG test for autocorrelation of orders 1-3. The p-value of this test is large (0.18), therefore we can maintain the null hypothesis of no autocorrelation of orders 1-3. Therefore, we use K = 3.
+
+
+
+```{r e1cii, include = TRUE}
+
+# J tests
+
+# library(urca)
+
+data = cbind(AAA, TB3)
+
+#library(vars)
+VARselect(data, type = "const")
+
+var3 = VAR(data, p = 3, type = "const")
+serial.test(var3, lags.bg = 3, type = "BG")
+
+```
+
+
+First we look at the "trace" J-test. There are four parts to the printout.
+
+* The first shows three estimated eigenvalues in decreasing order.
+
+* The second part shows the trade statistics for the null hypotheses of r_0 <= 1 and r_0 = 0. These need to be evaluated in reverse order, starting with r_0 = 0.
+
+  - The r_0 = 0 test statistics is very large (38.27), much larger than the 1% critical value (24.60)
+  
+  - However, the r_0 <= 1 test statistic is smaller than the correponding 10% value (7.52)
+  
+  - Therefore, at the 1%, 5% and 10% critical values alike r_0 = 0 is rejects but r_0 <= is maintained.
+  
+  - This implies r = 1.
+  
+* The third part shows the estimated corintegration relations that correspond to the three eigenvalues in the first table. 
+
+  - Since we concluded r = 1, we consider only the first eigenvalue and cointegrating relation.
+  
+  - Therefore, the estimated EC term, normalised with respect to the first endogenous variable is: AAA - 2.2585 - 1.0265TB3 = Epsilon
+
+* The fourth part of the printout shows the estimated speed of adjustment coefficients. Again, only the first column is relevant (i.e. alpha = [-0.0191, 0.0107])
+
+```{r e1ciii, include = TRUE}
+
+data = cbind(AAA, TB3)
+j.trace = ca.jo(data, type = "trace", K = 3, ecdet = "const")
+summary(j.trace)
+
+```
+
+Now we conduct the same process but using the maximum eigenvalue test.
+
+* Only the second part of the new prinout differs from the previous, the rest are the same.
+
+* However, the statistical conclusions do not change: we reejct the first null hypothesis but maintain the second, implying r = 1.
+
+
+```{r e1civ, include = TRUE}
+
+data = cbind(AAA, TB3)
+j.trace = ca.jo(data, type = "eigen", K = 3, ecdet = "const")
+summary(j.trace)
+
+```
+
+
+### d) Estimate a VECM
+
+Like testing for cointegration, a VECM can be estimated based on the EG or J approaches.
+
+In the former, we have to estimate the long-run equilibrium relationship between the two variables, then estimated the VECM eqns one-by-one with the lagged residuals for the equilibrium used as the EC term.
+
+* Step 1: estimate the long-run equilibrium between the two variables.
+
+  - This prinout show the LR equilibrium relationship is: AAA = 3.1347 + 0.7962(TB3).
+  - There is a significantly positive relationship between AAA and TB3.
+
+* Step 2: save the residuals from this regression
+
+* Step 3: take the first difference of the dependent variable (AAA)
+
+* Step 4: take the lag of the residuals from LR equilibrium eqn
+
+* Step 5: regress the former (first difference of the dependent variable) on the latter (the lag of the residuals from the LR equilibrium eqn)
+
+Then you have the printout of the first VECM equation: DAAA = 0.0030 - 0,0263(ec_t-1).
+
+Then you need to derive the second equation of the VECM...
+
+```{r e1di, include = TRUE}
+
+# Step 1
+
+EC.1 <- lm(AAA ~ TB3)
+summary(EC.1)
+
+# Step 2
+
+e.1 = ts(EC.1$residuals, start = c(1950,1), end = c (2023,9), frequency = 12)
+
+# Step 3
+
+DAAA = window(diff(AAA), start = c(1950,2), end = c (2023,9),frequency = 12)
+
+# Step 4
+
+le.1 = window(stats::lag(e.1, -1), start = c(1950,2), end = c (2023,9), frequency = 12)
+
+# Step 5
+
+ec.11 <- lm(DAAA ~ le.1)
+summary(ec.11)
+```
+
+To derive the second equation of the VECM:
+
+* You need to regress the relevant series on the lagged residuals from the LR equation.
+
+
+```{r e1dii, include = TRUE}
+
+DTB3 = window(diff(TB3), start = c(1950,2), end = c (2023,9),
+frequency = 12)
+ec.12 = lm(DTB3 ~ le.1)
+summary(ec.12)
+
+```
+
+
+Reflections on this model:
+
+* The first regression is strongly significant although R_squared is very low.
+
+* The second regression is insignificant, as its its estimate of the speed of adjustment coefficient. This means the system of AAA and TB3 adjusts to deviations from the LR equilibrium through changes in AAA and the development of TB3 are not directly linked to the equilibrium error.
+
+* We did not check if these VECM equations are free of autocorrelation, and indeed they are not. However, if you augmented these equations with the first lags of the first differences of AAA and TB3, it is possible to eliminate autocorrelation.
+
+* The results of the EG two-step procedure can be sensitive to normalisation. Therefore, in practice it would be important to re-estimate the LR equilibrium between the two variables normalised to TB3, using the residuals from the new equilibrium regresison and estimate the two equations of the VECM. Do this to prep for the exam.
+
+<br>
+
+Now we move onto the Johansen procedure, starting with the trace method.
+
+* comparing this to the previous J-trace printout, you can see that:
+  
+  - i) the coefficients of the EC term (ect1) arethe same estimated speed of adjustment coefficients term as in the fourth part of the J trade test printout.
+  
+  - ii) the $beta vector is the estimated cointegration realtion and it is the same as teh first column vector in the third part of teh J-trace test printout.
+  
+* From this printout we get all the terms for the VECM(2):
+  
+  - DAAA(hat) = -0.0191(ect_t-1) + 0.3407(DAAA_t-1) - 0.2765(DAAA_t-2) + 0.0407(DTB3) + 0.0298(DTB3_t-2)
+  
+  - DTB3(hat) = 0.0107(ect_t-1) + 0.2963(DAAA_t-1) - 0.2491(DAAA_t-2) + 0.3405(DTB3_t-1) - 0.1355(DTB3_t-2)
+  
+* The EC term is:
+  
+  - ect = AAA - 2.2585 - 1.0265(TB3_t)
+  
+
+```{r e1diii, include = TRUE}
+
+vecm.j = cajorls(j.trace, r = 1)
+print(vecm.j)
+
+
+```
+
+
+## e) Obtain the VAR(3) representaion of the estimated VECM(2) model.
+
+Any VECM can be transformed into an equivalent VAR in levels with the vec2var() function.
+
+From this, we get the following VAR(3) model:
+
+ * AAA(hat) = 0.0432 + 1.3407(AAA_t-1) - 0.6172(AAA_t-2) + 0.2574(AAA_t-3) + 0.0407(TB3_t-1) - 0.0109(TB3_t-2) - 0.0101(TB3_t-3)
+
+* TB3(hat) = 0.0242 + 0.2963(AAA_t) - 0.5453(AAA_t-2) + 0.2598(AAA_t-3) + 1.3405(TB3_t-1) - 0.4761(TB3_t-2) + 0.1246(TB3_t-3)
+
+```{r e1e, include = TRUE}
+
+var.j = vec2var(j.trace, r = 1)
+print(var.j)
+
+
+```

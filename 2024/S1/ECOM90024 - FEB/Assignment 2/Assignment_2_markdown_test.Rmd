@@ -1,0 +1,409 @@
+---
+title: "ECOM90024 - Assignment 2_test"
+author: "Josh Copeland"
+date: "2024-04-22"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+library(lubridate)
+library(forecast)
+library(zoo)
+
+theme_set(theme_minimal())
+
+```
+```{r setup_text}
+
+# Packages used for this assignment
+ 
+# library(tidyverse)
+# library(lubridate)
+# library(forecast)
+# library(zoo)
+
+```
+
+```{r q1a}
+
+
+```
+
+
+```{r q1b}
+
+
+```
+
+
+```{r q1c}
+
+
+```
+
+
+# Question 2
+
+You are an analyst working for a real estate investment fund and are tasked with monitoring and forecasting house prices in the United States. The file csindex.csv contains monthly observations of the Case-Shiller U.S. National Home Price Index from January 1987 to December 2022. You are required to compute all your estimations and plots in R.
+
+### a) Generate a plot of the data and provide a brief description of the observed time series. (1 Mark)
+
+<br>
+
+Chart 1 below shows a plot of the data from the Case-Shiller US National Home Price Index, which seeks to measures the price level of existing single family-homes in the US. The data provided shows this price leve lfrom January 1987 to December 2022.
+
+There is a clear upward trend in this series over time, but there is also clear evidence of cyclical fluctuations in the data. It is unclear if the curvature of this series is attributable to the trend of the incidence of cyclical fluctuations over time. It's also possible that some of the shorter-term fluctuations (that seem to increase over time) could be attributable to seasonal patterns in the data. Testing and accounting for (if appropriate) both of these deterministic patterns in the data is required to isolate the cyclical fluctuations.
+
+There are clearest indicators of cyclical fluctuations in this data is the significant acceleration of growth in the series in the mid-2000s (and the decline the followed 2007/2008), likely driven by the unsustainable household credit conditions that culminated in the sub-prime mortgage crisis that kicked off the Global Financial Crisis. 
+
+<br>
+
+```{r q2a}
+
+data <- read_csv("csindex.csv") %>% 
+  select(date = DATE, price_level = CSUSHPISA) %>% 
+  mutate(date = dmy(date)) %>% 
+  na.omit()
+
+ggplot(data, aes(x = date, y = price_level)) + 
+  geom_line() + 
+  ggtitle("Chart 1: Price level of existing single family-homes in the US from January 1987 to December 2022") +
+  labs( x = "Date", 
+        y = "Index", 
+        caption = "Source: S&P CoreLogic, Case-Shiller Home Price Index.") + 
+  theme(plot.title = element_text(size = 10),
+        plot.caption = element_text(hjust = 0))
+
+
+```
+
+### b) Using the data from January 1987 to December 2018, identify and estimate an appropriate time series model using the steps outlined in Lecture 6. Make sure to report all relevant estimation results, plots, statistical tests and information criteria that you are relying on in determining your preferred model. (2 Marks)
+
+Steps for developing a time series forecasting model:
+
+* Specify and estimate deterministic components
+
+  + As noted in part (a), there seems to be some long-run upwards trend to the series. The code below evaluates the fit of a collection of deterministic trend models, where their fits have been illustrated in Chart 2. I evaluate the linear model as optimum model for decomposing the trend component of this time series, because it has the lowest AIC/BIC of the models evaluated (as seen in the model_selection_criteria table below). By taking the residuals of this model we can observe the detrended series.
+
+
+  + Using the detrended series we are able to determine if there is any deterministic seasonality in the data: I conclude this is not the case. This is done by generating a collection of dummy variables for each month of the year, and then regressing the detrended series on these dummy variables (as seen in the seasonal_model object). None of the estimated ceofficients are statistically different from zero. Moreover, they are jointly equal tozero according to the reported overall F-statistic, which is greater then 0.05. Therefore, we can conclude that the seasonal means are not statistically different and we do not have to de-season our data.
+  
+* Generate the residuals
+
+  + Because we do not need to deseasonalise our data, the detrended series is sufficient for isolating the cyclical component of the time series. The final comoponents that constitute this time series (observed, trend and cyclical) are avalable in the 
+
+* Generate the ACF and PACF of the residuals to get a sense of their dependence structure.
+
+  + Before generating the ACF and PACF it is important to demonstrate the cyclical series is not white noise, and that this process has some dependence which can be usefully modelled by an ARMA process. After conducting the portmanteau Box-Pierce and Ljung-Box tests, we can verify this cyclical data is not white noise. This is because both tests return a very small p-value, rejecting the null hypothesis of both tests that there is no autocorrelation in the time series. This implies dependence in them, suitable for ARMA modelling.
+  
+  + After generating the ACF and PACF we can make some observations about the dependence structure. The autocorrelations are decaying gradually up to the 20th lag. The partial autocorrelations cut off initially at lag three, but also become significant again for lags 9 through 13.
+  
+
+
+* Estimate a range of ARMA(p,q) and choose your preferred model using AIC and BIC
+
+  + By making these observations, we are able to search for suitable ARMA models. I will generate ARMA(p,q) with a maximum p value of 20 and a maximum q value of 13.
+
+```{r q2b}
+
+################################################################################
+################### SPECIFYING DETERMINISTIC TRENDS ############################
+################################################################################
+
+################# GENERATING TREND COMPONENT OF TIME SERIES ####################
+
+data <- data %>% 
+  filter(date < as.Date("2019-01-01")) %>%
+  mutate(
+    
+    time = seq(1,length(data$price_level)),
+    time_square = time^2,
+    hits_log = log(price_level)
+    
+  )
+
+
+# ESTIMATING MODELS
+
+
+# Linear model
+
+price_model_linear <- lm(price_level ~ time, data = data)
+
+#Quadratic model
+
+price_model_quadratic <- lm(price_level ~ time + time_square, data = data)
+
+#Exponential model
+
+price_model_exponential_descaled <- nls(price_level ~ a*exp(b*time), start = list(a=8000, b = 0.01), data = data)
+
+
+
+
+# EXTRACTING MODEL FITS
+
+data <- data %>% 
+  mutate(
+    
+    linear_model = predict(price_model_linear),
+    
+    quadratic_model = predict(price_model_quadratic),
+    
+    exponential_model = predict(price_model_exponential_descaled)
+    
+  )
+
+
+ggplot(data, aes(x = date)) + 
+  geom_line(aes(y = price_level, colour = "Data")) +
+  geom_line(aes(y = linear_model, colour = "Linear")) + 
+  geom_line(aes(y = quadratic_model, colour = "Quadratic")) + 
+  geom_line(aes(y = exponential_model, colour = "Exponential")) + 
+  scale_color_manual(values = c("Data"= "black" ,"Linear" = "blue", "Quadratic" = "red", "Exponential" = "green")) +
+  labs(colour = "Model") +
+  labs(x = "Date", y = "Index") + 
+  ggtitle("Chart 2: US home price index with deterministic trend fits")
+
+# COMPARING MODEL OUTPUTS
+
+model_list <- list(price_model_linear, price_model_quadratic, price_model_exponential_descaled)
+
+model_names <- c("price_model_linear", "price_model_quadratic", "price_model_exponential_descaled")
+
+extract_criteria <- function(model, model_name) {
+  summary_data <- summary(model)
+  aic <- AIC(model)
+  bic <- BIC(model)
+  return(data.frame(Model = model_name, AIC = aic, BIC = bic))
+}
+
+model_selection_criteria <- map2_df(model_list, model_names, extract_criteria) %>% 
+  arrange(AIC)
+
+print(model_selection_criteria) %>% 
+  arrange(AIC)
+
+# Exponential model returns the lowest AIC/BIC. Therefore use this as the trend series.
+
+
+################# TESTING THE USE OF A MOVING AVERAGE TREND ####################
+
+data <- data %>% 
+  # mutate(price_level_MA = 1/2 * (
+  #   1/12 * (
+  #     lag(price_level, 11) + lag(price_level, 10) + lag(price_level, 9) +
+  #     lag(price_level, 8) + lag(price_level, 7) + lag(price_level, 6) +
+  #     lag(price_level, 5) + lag(price_level, 4) + lag(price_level, 3) +
+  #     lag(price_level, 2) + lag(price_level, 1) + price_level
+  #   ) ) + 1/2 * (
+  #   1/12 * (
+  #     lead(price_level, 1) + lead(price_level, 2) + lead(price_level, 3) +
+  #     lead(price_level, 4) + lead(price_level, 5) + lead(price_level, 6) +
+  #     lead(price_level, 7) + lead(price_level, 8) + lead(price_level, 9) +
+  #     lead(price_level, 10) + lead(price_level, 11) + lead(price_level, 12)
+  #   )
+  # ))
+  mutate(price_level_MA =
+           1/2 * (rollapply(price_level, width = 12, FUN = mean, align = "right", fill = NA, na.rm = FALSE))
+         + 1/2 *  (rollapply(price_level, width = 12, FUN = mean, align = "left", fill = NA, na.rm = FALSE)))
+
+
+# Need to generate the detrended series to test for seasonal effects
+
+data <- data %>% 
+  mutate(
+    
+    detrended = price_level - price_level_MA
+    
+  )
+
+ggplot(data, aes(x = date)) + geom_line(aes(y = price_level)) + geom_line(aes(y = price_level_MA))
+
+ggplot(data, aes(x = date)) + geom_line(aes(y = detrended))
+
+################# GENERATING SEASONAL COMPONENT OF TIME SERIES #################
+
+
+
+data <- data %>% 
+  mutate(month = month(date)) %>% 
+  mutate(
+    
+    jan_dummy = case_when(month == 1 ~ 1, TRUE ~ 0),
+    feb_dummy = case_when(month == 2 ~ 1, TRUE ~ 0),
+    mar_dummy = case_when(month == 3 ~ 1, TRUE ~ 0),
+    apr_dummy = case_when(month == 4 ~ 1, TRUE ~ 0),
+    may_dummy = case_when(month == 5 ~ 1, TRUE ~ 0),
+    jun_dummy = case_when(month == 6 ~ 1, TRUE ~ 0),
+    jul_dummy = case_when(month == 7 ~ 1, TRUE ~ 0),
+    aug_dummy = case_when(month == 8 ~ 1, TRUE ~ 0),
+    sep_dummy = case_when(month == 9 ~ 1, TRUE ~ 0),
+    oct_dummy = case_when(month == 10 ~ 1, TRUE ~ 0),
+    nov_dummy = case_when(month == 11~ 1, TRUE ~ 0),
+    dec_dummy = case_when(month == 12 ~ 1, TRUE ~ 0),
+    
+  )
+
+seasonal_model <- lm(detrended ~ 0 + jan_dummy + feb_dummy + mar_dummy + 
+                       apr_dummy + may_dummy + jun_dummy + 
+                       jul_dummy + aug_dummy + sep_dummy +
+                       oct_dummy + nov_dummy + dec_dummy, 
+                     data = data)
+
+
+summary(seasonal_model)
+
+
+
+
+################################################################################
+######################### GENERATING THE RESIDUALS #############################
+################################################################################
+
+
+
+data_decomposed <- data %>% 
+  select(date, price_level, trend = linear_model, cyclical = detrended)
+
+
+
+
+
+
+#################################################################################
+############ ANALYSING DEPENDENCE STRUCTURE OF CYCLICAL DATA ####################
+################################################################################
+
+
+# CONFIRMING THE CYCLICAL DATA IS NOT WHITE NOISE
+
+m = ceiling((sqrt(length(data_decomposed$price_level))))
+
+Box.test(data_decomposed$cyclical, lag = m, type = "Box-Pierce")
+
+Box.test(data_decomposed$cyclical, lag = m, type = "Box-Pierce")
+
+
+# GENERATING ACF AND PACF
+
+acf_cyclical <- acf(data_decomposed$cyclical, plot = FALSE)
+pacf_cyclical <- pacf(data_decomposed$cyclical, plot = FALSE)
+
+plot(acf_cyclical[1:20], main = "Sample ACF for the cyclical house price level")
+plot(pacf_cyclical[1:20], main = "Sample PACF for the cyclical house price level")
+
+
+
+
+
+################################################################################
+################### GENERATING AND EVALUATING ARMA MODELS ######################
+################################################################################
+
+######################### GENERATING BEST ARMA MODEL ###########################
+
+# Specify the parameter values from the ACF and PACF
+
+pstart = 0
+pend = 13
+
+qstart = 0 
+qend = 4
+
+#Generate the dataframe to store different ARMA(p,q) model combinations in
+
+prefix.ar <- "ar"
+suffix.ar <- seq(from = pstart, to = pend)
+
+prefix.ma <- "ma"
+suffix.ma <- seq(from = qstart, to = qend)
+
+ar.label <- paste(prefix.ar, suffix.ar, sep = "")
+ma.label <- paste(prefix.ma, suffix.ma, sep = "")
+
+akaike <- data.frame(row.names = ar.label, matrix(NA,(pend-pstart+1),qend+1))
+colnames(akaike) <- ma.label
+
+bayes <- data.frame(row.names = ar.label, matrix(NA,(pend-pstart+1),qend+1))
+colnames(bayes) <- ma.label
+
+# Generate the loop required to iterate over different ARMA(p,q) combinations and store them appropriate in the dataframe provided above.
+
+for(i in pstart:pend){
+
+for(j in (qstart+1):(qend+1)){
+
+model <- try(Arima(data_decomposed$cyclical,
+order = c(i,0,j-1),
+include.mean = FALSE,
+include.drift = FALSE,
+method = "CSS-ML"))
+if(!inherits(model, "try-error") && model$code == 0){
+akaike[i,j] <- AIC(model)
+bayes[i,j]<- BIC(model)}
+}
+
+}
+
+# Code to try extract which model AIC and BIC prefers
+
+akaike.row <- rownames(akaike)[which(akaike == min(akaike, na.rm = TRUE),arr.ind = TRUE)[ , 1]]
+akaike.col <- colnames(akaike)[which(akaike == min(akaike, na.rm = TRUE),arr.ind = TRUE)[ , 2]]
+
+akaike.choice <- c(akaike.row, akaike.col) 
+
+print(akaike.choice)
+
+
+bayes.row <- rownames(bayes)[which(bayes == min(bayes, na.rm = TRUE),arr.ind = TRUE)[ , 1]]
+bayes.col <- colnames(akaike)[which(bayes == min(bayes, na.rm = TRUE),arr.ind = TRUE)[ , 2]]
+
+bayes.choice <- c(bayes.row, bayes.col)
+
+print(bayes.choice)
+
+#Both AIC and BIC agree that ARMA(12,3) is the best model fit.
+
+
+############################# TESTING THE BEST MODEL FIT #######################
+
+ best_model <- Arima(data_decomposed$cyclical, 
+                     order = c(12,0,3),
+                     include.mean = FALSE,
+                     method = "ML")
+
+summary(best_model)
+
+autoplot(best_model)
+
+plot(data_decomposed$date, best_model$residuals,
+     main = "Residuals from ARMA(12,3) model",
+     xlab = "Date",
+     ylab = "Residual",
+     type = "l",
+     ylim = c(-2,2))
+
+
+acf.resid <- acf(best_model$resid, plot = FALSE)
+pacf.resid <- pacf(best_model$resid, plot = FALSE)
+
+plot(acf.resid[1:20], main = "Sample ACF of residuals from ARMA(12,3) model")
+plot(pacf.resid[1:20], main = "Sample PACF of residuals from ARMA(12,3) model")
+
+
+Box.test(best_model$resid, type = "Box-Pierce", l = m)
+Box.test(best_model$resid, type = "Ljung-Box", l = m)
+
+```
+
+### c) Using your estimation results from part b, compute and plot appropriate point and
+interval forecasts for the period spanning January 2019 to January 2022. Do the forecasts perform well when compared to the actual realisations? Why or why not? (2 Marks)
+
+```{r q2c}
+
+
+```

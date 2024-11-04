@@ -1,0 +1,16 @@
+="Table 2. The effect of school construction on public good provision"
+
+="",="(1)",="(2)",="(3)",="(4)",="(5)",="(6)",="(7)",="(8)",="(9)"
+="",="There is a primary health center in the village",="There is a primary health center in the village",="There is a primary health center in the village",="There are doctors in the village",="There are doctors in the village",="There are doctors in the village",="There is access to safe drinking water in the village",="There is access to safe drinking water in the village",="There is access to safe drinking water in the village"
+
+="post92",="0.049***",="0.005",="-0.005*",="0.064***",="0.021**",="0.001",="0.052***",="0.027*",="-0.005"
+="",="(0.003)",="(0.007)",="(0.003)",="(0.004)",="(0.010)",="(0.003)",="(0.015)",="(0.015)",="(0.005)"
+
+="interaction",="0.010***",="0.010***",="0.012***",="0.004",="0.005",="0.006*",="0.005",="0.005",="0.018**"
+="",="(0.003)",="(0.003)",="(0.003)",="(0.004)",="(0.004)",="(0.003)",="(0.014)",="(0.014)",="(0.007)"
+
+="R-squared",="0.013",="0.018",="0.837",="0.012",="0.016",="0.820",="0.001",="0.004",="0.923"
+="Observations",="59130",="59130",="59130",="59130",="59130",="59130",="39420",="39420",="39420"
+
+="Standard errors in parentheses"
+="* p<0.1, ** p<0.05, *** p<0.01"

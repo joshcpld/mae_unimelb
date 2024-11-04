@@ -1,0 +1,86 @@
+---------------------------------------------------------------
+      name:  <unnamed>
+       log:  C:\Users\joshc\OneDrive\Desktop\git\mae_unimelb\20
+> 24\S2\ECOM90003 - Applied Microeconometric Modelling\tutorial
+> _data\week3.log
+  log type:  text
+ opened on:   8 Aug 2024, 12:42:32
+
+. 
+. * Import Data
+. 
+. use CardKruegerTute3, clear
+file CardKruegerTute3.dta not found
+r(601);
+
+end of do-file
+
+r(601);
+
+. do "C:\Users\joshc\AppData\Local\Temp\STD7f7c_000002.tmp"
+
+. *************************************************************
+> ***********
+. ************** ECOM90003 - Applied Microeconometric Modelling
+>   *********
+. **************************** Tutorial: Week 3 ***************
+> **********
+. *************************************************************
+> ***********
+. 
+. // note: di command stands for "display" - use it to conduct 
+> arithmetic!
+. 
+. *************************************************************
+> ***********
+. ******************************* SET-UP **********************
+> ***********
+. *************************************************************
+> ***********
+. 
+. clear // clear all data from memory
+
+. 
+. 
+. set more off // pause more message 
+
+.   
+. cd "C:\Users\joshc\OneDrive\Desktop\git\mae_unimelb\2024\S2\E
+> COM90003 - Applied Microeconometric Modelling\Week 3\"
+C:\Users\joshc\OneDrive\Desktop\git\mae_unimelb\2024\S2\ECOM900
+> 03 - Applied Microeconometric Modelling\Week 3
+
+. 
+. log using "week3.log", replace // if you get log file open er
+> ror message, insert: "log close" into command
+log file already open
+r(604);
+
+end of do-file
+
+r(604);
+
+. do "C:\Users\joshc\AppData\Local\Temp\STD7f7c_000003.tmp"
+
+. *************************************************************
+> ***********
+. ************** ECOM90003 - Applied Microeconometric Modelling
+>   *********
+. **************************** Tutorial: Week 3 ***************
+> **********
+. *************************************************************
+> ***********
+. 
+. // note: di command stands for "display" - use it to conduct 
+> arithmetic!
+. 
+. *************************************************************
+> ***********
+. ******************************* SET-UP **********************
+> ***********
+. *************************************************************
+> ***********
+. 
+. clear // clear all data from memory
+
+. capture log close 

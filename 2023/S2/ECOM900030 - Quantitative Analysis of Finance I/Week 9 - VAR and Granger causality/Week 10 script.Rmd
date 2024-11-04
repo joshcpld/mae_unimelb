@@ -1,0 +1,209 @@
+---
+title: "Week 10 Tutorial"
+author: 'Josh Copeland'
+subtitle: 'ECON90033 - 2023 Semester 2 '
+date: "Completed on 16 October 2023"
+
+
+output: 
+  html_document:
+  theme: journal
+---
+
+```{r setup, include = FALSE}
+
+library(tidyverse)
+library(readxl)
+library(lubridate)
+library(forecast)
+library(knitr)
+library(vars)
+library(bruceR)
+
+```
+
+## Exercise 1
+
+### a) Import the data set. and attach it to your R project. Construct the rate of inflation rate (p_t) and the growth rate of money supply (m_t). Plot these variables and briefly comment on the figures.
+
+<br>
+
+Both series look like they fluctuate around some constant mean
+
+```{r e1a, include = TRUE}
+
+e1 <- read_excel("C:/Users/joshc/Documents/2023S2/ECON90033/Tutorials/Week 10/t10e1.xlsx")
+
+ppi <- e1 %>% 
+  pull(ppi) %>% 
+  ts(start = c(1960,1), end = c(2002,1), frequency = 4)
+
+m1 <- e1 %>% 
+  pull(m1) %>% 
+  ts(start = c(1960,1), end = c(2002,1), frequency = 4)
+
+p <- 100*diff(log(ppi))
+
+m <- 100*diff(log(m1))
+
+plot(p, main = "Rate of inflation, US", col = "red", ylab = "%")
+
+plot(m, main = "Rate of money supply, US", col = "darkgreen", ylab = "%")
+
+
+```
+
+### b) Perform the ADF and KPSS tests on the levels and first differences of p and m. What conclusions do you draw from these tests about the order of integration of these variables?
+
+
+NEED TO EMAIL LAZSLO FOR CONFIRMATION ABOUT TABLE.
+
+```{r e1b, include = TRUE}
+
+library(urca)
+
+#ADF tests
+
+adf_p <- ur.df(p, type = "drift", selectlags = "BIC")
+summary(adf_p)
+
+adf_d_p <- ur.df(diff(p), type = "drift", selectlags = "BIC")
+summary(adf_d_p)
+
+adf_m <- ur.df(m, type = "drift", selectlags = "BIC")
+summary(adf_m)
+
+adf_d_m <- ur.df(diff(m), type = "drift", selectlags = "BIC")
+summary(adf_d_m)
+
+#KPSS tests
+
+kpss_p = ur.kpss(p, type = "mu")
+summary(kpss_p)
+
+kpss_d_p = ur.kpss(diff(p), type = "mu")
+summary(kpss_d_p)
+
+kpss_m = ur.kpss(m, type = "mu")
+summary(kpss_m)
+
+kpss_d_m = ur.kpss(diff(m), type = "mu")
+summary(kpss_d_m)
+
+
+```
+
+
+### c) Consider a VAR model with a constant of p and m, and determine the optimal lag length
+with the VARselect() function of the vars package.
+
+<br>
+
+The output below tells us HQ and SC take their smallest values at 5 lags, whereas its 10 lags for AIC and FPE.
+
+Start with the 5-lag model and then test the residuals for first and second order autocorrelation using the Breusch-Godfrey (BG) LM test.
+
+Given the large p-value (0.51), we maintain the null hypothesis ther there is not first and second order residual serial autocorrelation and accept the VAR(5) model.
+
+```{r e1ci, include = TRUE}
+
+#library(vars)
+
+data <- cbind(p,m)
+
+VARselect(data, type = "const")
+
+var5 <- VAR(data, p = 5, type = "const")
+
+serial.test(var5, lags.bg = 2, type = "BG")
+
+```
+
+<br>
+
+Below we can see a breakdown of the VAR model printout:
+
+* The first part shows, among other things, the lengths of the estimated characteristic roots. As this is a bivariate system with 5 lags, there are 10 characteristic roots.As the absolute values of their points estimates are all smaller than 1, we conclude this VAR is stable.
+
+* The second part shows the two estimated equations of the VAR(5). Both are acceptable as they are strongly significant and have reasonable adjusted R^2 values. 
+  
+  - However, there are also many insignificant t ratios. This is not unusual in VAR models, and it is not an isue because in VAR analyses the individual coefficients are of little importance.
+
+```{r e1cii, include = TRUE}
+
+summary(var5)
+
+```
+
+
+### d) Use the estimated VAR(5) model to forecast p and m 1- 4 quarters ahead.
+
+<br>
+
+The plots below show that the 80% and 95% prediction bands are both very wide, showing that the point predictions are of little precision.
+
+```{r e1d, include = TRUE}
+
+#library(forecast)
+
+var5_ea <- forecast(var5, h = 4)
+
+print(var5_ea)
+
+autoplot(var5_ea)
+
+
+```
+
+### e) Use the estimated VAR(5) model to test for Granger causality between p and m at the 5% significance level.
+
+<br>
+
+Before getting into the question, a brief recap of Granger causality:
+
+* For two stationary variables Y and Z, Z is asid to be Granger causal to Y if and only if Y_t+1 can be predicted better when the information set includes Z_t, Z_t-1 etc. 
+
+* If both variables are Granger causal to each other, there is a two-way (or feedback) Granger causal relationship between the two variables.
+
+When we set up a VAR model, the LGS variables are considered endogenous variables. However, Granger causality tests allow is to explicitly test if they are empirically endogenous within the defined system of a model. 
+
+A variable is an endogenous variable in the given sytem if the other variables jointly Granger cause it. Otherwise, it is exogenous.
+
+This relationship is tested with a general F-test or the Wald chi-square test on all lags of a variable (or several variables jointly). 
+
+Under the null hypothesis, all these lags have zero coefficients. In the alternate hypothesis, some lag(s) has (have) non-zero coefficient(s).
+
+Looking at the granger causality test for the VAR model of the inflation rate and rate of growth in the money supply we can see:
+
+* At the 5% level both tests indicate that m is not causing p (i.e. m -\> p) and that p is causing m (i.e. m -> p)
+* However, at the 10% level, both tests indicated a two-way (feedback) Granger causal relationship between them (i.e. p <-> m)
+
+This implies that for this bivariate VAR system, the p and m are endogenous variables at the 10% signficance level. At the 5% level, m is exogenous.
+
+Often you might get contradicting or ambiguous test results. In this case you might need to make a call about whether to use the F or Chi-square test. To make this call remember: F tests assume normality whereas Chi-square does not.
+
+```{r e1ei, include = TRUE}
+
+# library(bruceR)
+
+granger_causality(var5)
+
+```
+
+<br>
+After estimating a VAR model, multivariate Jarque-Bera tests and multivariate skewness and kurtosis tests need to be performed. This compares the skewness and kurtosis statistics to the skewness and kurtosis paramters of a multivariate normal distributions whose expected valeus and standard deviations are equal to the corresponding sample means and sample standard deviations.
+
+To interpret the output:
+
+* the p-value of the multivariate JB test is practically zero, so the null hypothesis of normality can be safely rejected.
+
+* the middle and bottom part of this prinout focus on the two crucial componentso f the JB test: skewness and kurtosis:
+
+  - The p-value for skewness is large (0.52), therefore in terms of skewness the residuals might be normally distributed.
+  - The p-value of kurtossis is practically zero. Therefore, the kurtossis of the residuals are not normally distributed. Therefore that's why the JB test rejects 
+
+```{r e1eii, include = TRUE}
+
+normality.test(var5)
+
+```

@@ -1,0 +1,257 @@
+---------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  C:\Users\joshc\OneDrive\Desktop\git\mae_unimelb\2024\S2\ECOM90
+> 003 - Applied Microeconometric Modelling\Week 1\StataLab.log
+  log type:  text
+ opened on:  25 Jul 2024, 12:23:52
+
+. 
+end of do-file
+
+. do "C:\Users\joshc\AppData\Local\Temp\STD8c48_000006.tmp"
+
+. log using "StataLab.log", replace
+log file already open
+r(604);
+
+end of do-file
+
+r(604);
+
+. do "C:\Users\joshc\AppData\Local\Temp\STD8c48_000007.tmp"
+
+. /* 
+> Introduction to stata
+> */
+. 
+. /*This program runs a regression of lnwages and plots predictions*/
+. 
+. /*This is a complete version of the session */
+. 
+. // Use Ctrl + D to run a highlighted section
+. 
+. clear // clear all data from memory
+
+. set more off // pause more message 
+
+. 
+. // Change directory (folder to import data from + save data/plots/tables 
+> to)
+. // Change this path to the folder for tutorial materials on your computer
+. cd"C:\Users\joshc\OneDrive\Desktop\git\mae_unimelb\2024\S2\ECOM90003 - Ap
+> plied Microeconometric Modelling\Week 1\
+C:\Users\joshc\OneDrive\Desktop\git\mae_unimelb\2024\S2\ECOM90003 - Applied
+>  Microeconometric Modelling\Week 1
+
+. "
+" is not a valid command name
+r(199);
+
+end of do-file
+
+r(199);
+
+. do "C:\Users\joshc\AppData\Local\Temp\STD8c48_000008.tmp"
+
+. clear // clear all data from memory
+
+. set more off // pause more message 
+
+. 
+. // Change directory (folder to import data from + save data/plots/tables 
+> to)
+. // Change this path to the folder for tutorial materials on your computer
+. cd"C:\Users\joshc\OneDrive\Desktop\git\mae_unimelb\2024\S2\ECOM90003 - Ap
+> plied Microeconometric Modelling\Week 1\"
+C:\Users\joshc\OneDrive\Desktop\git\mae_unimelb\2024\S2\ECOM90003 - Applied
+>  Microeconometric Modelling\Week 1
+
+. 
+end of do-file
+
+. do "C:\Users\joshc\AppData\Local\Temp\STD8c48_000009.tmp"
+
+. log using "StataLab.log", replace
+log file already open
+r(604);
+
+end of do-file
+
+r(604);
+
+. do "C:\Users\joshc\AppData\Local\Temp\STD8c48_00000a.tmp"
+
+. // Import data: make sure the files are in the directory folder. If not, 
+> then specify the correct pathway in the name, i.e. "Tutorial 1/Wage.xlsx"
+.         // Excel spreadsheet
+.         import excel using WAGE, firstrow clear
+(6 vars, 526 obs)
+
+.         import excel using "WAGE.xlsx", firstrow clear
+(6 vars, 526 obs)
+
+.         
+.         // Text file, csv files,...
+.         import delimited using "WAGE.txt", clear
+(encoding automatically selected: ISO-8859-9)
+(6 vars, 526 obs)
+
+.         
+.         // Dta files (Stata's format)
+.         use "~/Dropbox/Tutoring/Semester 2 2022/AMM/Tutorials/Tutorial 1/
+> WAGE.dta", clear
+file C:\Users\joshc/Dropbox/Tutoring/Semester 2
+    2022/AMM/Tutorials/Tutorial 1/WAGE.dta not found
+r(601);
+
+end of do-file
+
+r(601);
+
+. do "C:\Users\joshc\AppData\Local\Temp\STD8c48_00000b.tmp"
+
+.         sum wage 
+
+    Variable |        Obs        Mean    Std. dev.       Min        Max
+-------------+---------------------------------------------------------
+        wage |        526    5.908992    3.709104        .53         25
+
+.         sum _all, de // Summary statistics 
+
+                            wage
+-------------------------------------------------------------
+      Percentiles      Smallest
+ 1%          1.7            .53
+ 5%          2.8            1.4
+10%          2.9            1.5       Obs                 526
+25%          3.3            1.5       Sum of wgt.         526
+
+50%          4.7                      Mean           5.908992
+                        Largest       Std. dev.      3.709104
+75%          6.9             22
+90%           10             22       Variance       13.75746
+95%           13             23       Skewness       2.005443
+99%           20             25       Kurtosis       7.938989
+
+                            educ
+-------------------------------------------------------------
+      Percentiles      Smallest
+ 1%            4              0
+ 5%            8              0
+10%            9              2       Obs                 526
+25%           12              3       Sum of wgt.         526
+
+50%           12                      Mean           12.56274
+                        Largest       Std. dev.      2.769022
+75%           14             18
+90%           16             18       Variance       7.667485
+95%           17             18       Skewness      -.6195741
+99%           18             18       Kurtosis       4.884245
+
+                            exper
+-------------------------------------------------------------
+      Percentiles      Smallest
+ 1%            1              1
+ 5%            1              1
+10%            2              1       Obs                 526
+25%            5              1       Sum of wgt.         526
+
+50%         13.5                      Mean           17.01711
+                        Largest       Std. dev.      13.57216
+75%           26             49
+90%           38             49       Variance       184.2035
+95%           43             50       Skewness       .7068652
+99%           49             51       Kurtosis       2.357318
+
+                          nonwhite
+-------------------------------------------------------------
+      Percentiles      Smallest
+ 1%            0              0
+ 5%            0              0
+10%            0              0       Obs                 526
+25%            0              0       Sum of wgt.         526
+
+50%            0                      Mean           .1026616
+                        Largest       Std. dev.      .3038053
+75%            0              1
+90%            1              1       Variance       .0922977
+95%            1              1       Skewness       2.618234
+99%            1              1       Kurtosis       7.855148
+
+                           gender
+-------------------------------------------------------------
+no observations
+
+                           married
+-------------------------------------------------------------
+      Percentiles      Smallest
+ 1%            0              0
+ 5%            0              0
+10%            0              0       Obs                 526
+25%            0              0       Sum of wgt.         526
+
+50%            1                      Mean            .608365
+                        Largest       Std. dev.      .4885804
+75%            1              1
+90%            1              1       Variance       .2387108
+95%            1              1       Skewness      -.4440136
+99%            1              1       Kurtosis       1.197148
+
+. 
+end of do-file
+
+. do "C:\Users\joshc\AppData\Local\Temp\STD8c48_00000c.tmp"
+
+.         sum wage 
+
+    Variable |        Obs        Mean    Std. dev.       Min        Max
+-------------+---------------------------------------------------------
+        wage |        526    5.908992    3.709104        .53         25
+
+. 
+end of do-file
+
+. tab gender
+
+     gender |      Freq.     Percent        Cum.
+------------+-----------------------------------
+     Female |        252       47.91       47.91
+       Male |        274       52.09      100.00
+------------+-----------------------------------
+      Total |        526      100.00
+
+. tab educ
+
+       educ |      Freq.     Percent        Cum.
+------------+-----------------------------------
+          0 |          2        0.38        0.38
+          2 |          1        0.19        0.57
+          3 |          1        0.19        0.76
+          4 |          3        0.57        1.33
+          5 |          1        0.19        1.52
+          6 |          6        1.14        2.66
+          7 |          4        0.76        3.42
+          8 |         22        4.18        7.60
+          9 |         17        3.23       10.84
+         10 |         30        5.70       16.54
+         11 |         29        5.51       22.05
+         12 |        198       37.64       59.70
+         13 |         39        7.41       67.11
+         14 |         53       10.08       77.19
+         15 |         21        3.99       81.18
+         16 |         68       12.93       94.11
+         17 |         12        2.28       96.39
+         18 |         19        3.61      100.00
+------------+-----------------------------------
+      Total |        526      100.00
+
+. tab gender
+
+     gender |      Freq.     Percent        Cum.
+------------+-----------------------------------
+     Female |        252       47.91       47.91
+       Male |        274       52.09      100.00
+------------+-----------------------------------
+      Total |        526      100.00
+
+. exit, clear

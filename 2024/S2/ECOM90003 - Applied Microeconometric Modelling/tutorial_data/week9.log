@@ -1,0 +1,410 @@
+---------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  C:\Users\joshc\OneDrive\Desktop\git\mae_unimelb\2024\S2\ECOM90003 - 
+> Applied Microeconometric Modelling\tutorial_data\week9.log
+  log type:  text
+ opened on:  19 Sep 2024, 12:32:40
+
+. 
+. * Import Data
+. 
+. use loanapp-1, clear
+
+. 
+. 
+. ************************************************************************
+. ********************************** Q1 **********************************
+. ************************************************************************
+. 
+. // Prob of graduating if study = 10
+. 
+. di 2.718^(-1.17+0.24*3+0.00058*1200+0.073*10) / (1+2.718^(-1.17+0.24*3+0.00058*
+> 1200+0.073*10))
+.72629369
+
+. 
+. // Prob of graduating if study = 5
+. 
+. di 2.718^(-1.17+0.24*3+0.00058*1200+0.073*5) / (1+2.718^(-1.17+0.24*3+0.00058*1
+> 200+0.073*5))
+.64815443
+
+. 
+. di 2.718^(-1.17+0.24*3+0.00058*1200+0.073*10) / (1+2.718^(-1.17+0.24*3+0.00058*
+> 1200+0.073*10)) - 2.718^(-1.17+0.24*3+0.00058*1200+0.073*5) / (1+2.718^(-1.17+0
+> .24*3+0.00058*1200+0.073*5))
+.07813926
+
+. 
+end of do-file
+
+. do "C:\Users\joshc\AppData\Local\Temp\STD4134_000005.tmp"
+
+. 
+. reg approce white, r
+variable approce not found
+r(111);
+
+end of do-file
+
+r(111);
+
+. do "C:\Users\joshc\AppData\Local\Temp\STD4134_000006.tmp"
+
+. 
+. reg approve white, r
+
+Linear regression                               Number of obs     =      1,989
+                                                F(1, 1987)        =      55.75
+                                                Prob > F          =     0.0000
+                                                R-squared         =     0.0489
+                                                Root MSE          =      .3201
+
+------------------------------------------------------------------------------
+             |               Robust
+     approve | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+       white |   .2005957   .0268651     7.47   0.000      .147909    .2532824
+       _cons |   .7077922   .0259264    27.30   0.000     .6569465     .758638
+------------------------------------------------------------------------------
+
+. 
+end of do-file
+
+. do "C:\Users\joshc\AppData\Local\Temp\STD4134_000007.tmp"
+
+. reg approve white hrat, obrat loanprc unem male married dep sch chist pubrec mo
+> rtlat1 mortlat2 vr, r
+invalid 'r' 
+r(198);
+
+end of do-file
+
+r(198);
+
+. do "C:\Users\joshc\AppData\Local\Temp\STD4134_000008.tmp"
+
+. 
+. reg approve white hrat, obrat loanprc unem male married dep sch chist pubrec mo
+> rtlat1 mortlat2 vr, r
+invalid 'r' 
+r(198);
+
+end of do-file
+
+r(198);
+
+. do "C:\Users\joshc\AppData\Local\Temp\STD4134_000009.tmp"
+
+. 
+. reg approve white hrat, obrat loanprc unem male married dep sch chist pubrec mo
+> rtlat1 mortlat2 vr
+option obrat not allowed
+r(198);
+
+end of do-file
+
+r(198);
+
+. do "C:\Users\joshc\AppData\Local\Temp\STD4134_00000a.tmp"
+
+. 
+. reg approve white hrat obrat loanprc unem male married dep sch chist pubrec mor
+> tlat1 mortlat2 vr, r
+
+Linear regression                               Number of obs     =      1,971
+                                                F(14, 1956)       =      16.06
+                                                Prob > F          =     0.0000
+                                                R-squared         =     0.1656
+                                                Root MSE          =       .302
+
+------------------------------------------------------------------------------
+             |               Robust
+     approve | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+       white |   .1287029   .0258519     4.98   0.000     .0780028    .1794031
+        hrat |   .0018026   .0014581     1.24   0.217     -.001057    .0046622
+       obrat |  -.0054069   .0013253    -4.08   0.000     -.008006   -.0028078
+     loanprc |  -.1477059   .0377987    -3.91   0.000    -.2218359   -.0735758
+        unem |  -.0072954   .0037111    -1.97   0.049    -.0145735   -.0000174
+        male |  -.0040874   .0192962    -0.21   0.832    -.0419308    .0337559
+     married |   .0458662   .0172375     2.66   0.008     .0120604     .079672
+         dep |  -.0068224   .0069017    -0.99   0.323    -.0203579    .0067131
+         sch |   .0013706   .0172259     0.08   0.937    -.0324124    .0351536
+       chist |   .1329509   .0246236     5.40   0.000     .0846596    .1812422
+      pubrec |  -.2419888   .0427996    -5.65   0.000    -.3259264   -.1580513
+    mortlat1 |  -.0574234   .0661697    -0.87   0.386     -.187194    .0723471
+    mortlat2 |  -.1140945   .0910253    -1.25   0.210    -.2926113    .0644222
+          vr |  -.0314763   .0144793    -2.17   0.030    -.0598728   -.0030799
+       _cons |   .9376644   .0594061    15.78   0.000     .8211585     1.05417
+------------------------------------------------------------------------------
+
+. 
+end of do-file
+
+. do "C:\Users\joshc\AppData\Local\Temp\STD4134_00000b.tmp"
+
+. 
+. gen white_obr = white*obrat
+
+. 
+. reg approve white white_obrat hrat obrat loanprc unem male married dep sch chis
+> t pubrec mortlat1 mortlat2 vr, r
+variable white_obrat not found
+r(111);
+
+end of do-file
+
+r(111);
+
+. do "C:\Users\joshc\AppData\Local\Temp\STD4134_00000c.tmp"
+
+. 
+. gen white_obr = white*obrat
+variable white_obr already defined
+r(110);
+
+end of do-file
+
+r(110);
+
+. do "C:\Users\joshc\AppData\Local\Temp\STD4134_00000d.tmp"
+
+. 
+. reg approve white white_obr hrat obrat loanprc unem male married dep sch chist 
+> pubrec mortlat1 mortlat2 vr, r
+
+Linear regression                               Number of obs     =      1,971
+                                                F(15, 1955)       =      15.40
+                                                Prob > F          =     0.0000
+                                                R-squared         =     0.1708
+                                                Root MSE          =     .30113
+
+------------------------------------------------------------------------------
+             |               Robust
+     approve | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+       white |  -.1443508   .1049166    -1.38   0.169    -.3501108    .0614093
+   white_obr |   .0080339   .0031022     2.59   0.010     .0019499    .0141179
+        hrat |    .001735   .0014597     1.19   0.235    -.0011276    .0045977
+       obrat |  -.0121358   .0030056    -4.04   0.000    -.0180303   -.0062414
+     loanprc |  -.1532338   .0380832    -4.02   0.000    -.2279218   -.0785458
+        unem |  -.0075202   .0036967    -2.03   0.042    -.0147702   -.0002702
+        male |  -.0059005   .0191268    -0.31   0.758    -.0434116    .0316106
+     married |   .0456139   .0172006     2.65   0.008     .0118804    .0793474
+         dep |  -.0076156   .0068798    -1.11   0.268    -.0211083     .005877
+         sch |   .0010865   .0172148     0.06   0.950    -.0326749    .0348478
+       chist |   .1297389   .0245832     5.28   0.000      .081527    .1779509
+      pubrec |  -.2404478   .0429863    -5.59   0.000    -.3247516   -.1561441
+    mortlat1 |  -.0630563   .0653209    -0.97   0.334    -.1911622    .0650497
+    mortlat2 |  -.1274275   .0903456    -1.41   0.159    -.3046113    .0497563
+          vr |  -.0306098   .0144324    -2.12   0.034    -.0589144   -.0023053
+       _cons |   1.180706   .1105911    10.68   0.000     .9638168    1.397594
+------------------------------------------------------------------------------
+
+. 
+end of do-file
+
+. do "C:\Users\joshc\AppData\Local\Temp\STD4134_00000e.tmp"
+
+. 
+. probit approve white hrat obrat loanprc unem male married dep sch chist pubrec 
+> mortlat1 mortlat2 vr, r
+
+Iteration 0:  Log pseudolikelihood = -737.97933  
+Iteration 1:  Log pseudolikelihood = -603.64323  
+Iteration 2:  Log pseudolikelihood =    -600.34  
+Iteration 3:  Log pseudolikelihood = -600.33331  
+Iteration 4:  Log pseudolikelihood = -600.33331  
+
+Probit regression                                       Number of obs =  1,971
+                                                        Wald chi2(14) = 222.74
+                                                        Prob > chi2   = 0.0000
+Log pseudolikelihood = -600.33331                       Pseudo R2     = 0.1865
+
+------------------------------------------------------------------------------
+             |               Robust
+     approve | Coefficient  std. err.      z    P>|z|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+       white |   .5194155   .0962821     5.39   0.000     .3307061    .7081248
+        hrat |    .007656    .007176     1.07   0.286    -.0064088    .0217208
+       obrat |  -.0274755   .0063576    -4.32   0.000    -.0399362   -.0150149
+     loanprc |  -1.015171   .2486342    -4.08   0.000    -1.502485    -.527857
+        unem |  -.0367892   .0182586    -2.01   0.044    -.0725754    -.001003
+        male |  -.0372192   .1096639    -0.34   0.734    -.2521565     .177718
+     married |   .2665995   .0963134     2.77   0.006     .0778288    .4553702
+         dep |  -.0497158   .0391321    -1.27   0.204    -.1264134    .0269817
+         sch |   .0100712   .0930054     0.11   0.914    -.1722161    .1923585
+       chist |   .5843481   .0944234     6.19   0.000     .3992817    .7694145
+      pubrec |  -.7796671   .1287793    -6.05   0.000     -1.03207   -.5272644
+    mortlat1 |  -.1888639   .2667002    -0.71   0.479    -.7115868     .333859
+    mortlat2 |  -.4967616   .3216058    -1.54   0.122    -1.127097    .1335742
+          vr |  -.2009515    .081485    -2.47   0.014    -.3606591   -.0412439
+       _cons |   2.070704   .3254676     6.36   0.000       1.4328    2.708609
+------------------------------------------------------------------------------
+
+. 
+end of do-file
+
+. do "C:\Users\joshc\AppData\Local\Temp\STD4134_00000f.tmp"
+
+. 
+. probit approve white hrat obrat loanprc unem male married dep sch chist pubrec 
+> mortlat1 mortlat2 vr, r
+
+Iteration 0:  Log pseudolikelihood = -737.97933  
+Iteration 1:  Log pseudolikelihood = -603.64323  
+Iteration 2:  Log pseudolikelihood =    -600.34  
+Iteration 3:  Log pseudolikelihood = -600.33331  
+Iteration 4:  Log pseudolikelihood = -600.33331  
+
+Probit regression                                       Number of obs =  1,971
+                                                        Wald chi2(14) = 222.74
+                                                        Prob > chi2   = 0.0000
+Log pseudolikelihood = -600.33331                       Pseudo R2     = 0.1865
+
+------------------------------------------------------------------------------
+             |               Robust
+     approve | Coefficient  std. err.      z    P>|z|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+       white |   .5194155   .0962821     5.39   0.000     .3307061    .7081248
+        hrat |    .007656    .007176     1.07   0.286    -.0064088    .0217208
+       obrat |  -.0274755   .0063576    -4.32   0.000    -.0399362   -.0150149
+     loanprc |  -1.015171   .2486342    -4.08   0.000    -1.502485    -.527857
+        unem |  -.0367892   .0182586    -2.01   0.044    -.0725754    -.001003
+        male |  -.0372192   .1096639    -0.34   0.734    -.2521565     .177718
+     married |   .2665995   .0963134     2.77   0.006     .0778288    .4553702
+         dep |  -.0497158   .0391321    -1.27   0.204    -.1264134    .0269817
+         sch |   .0100712   .0930054     0.11   0.914    -.1722161    .1923585
+       chist |   .5843481   .0944234     6.19   0.000     .3992817    .7694145
+      pubrec |  -.7796671   .1287793    -6.05   0.000     -1.03207   -.5272644
+    mortlat1 |  -.1888639   .2667002    -0.71   0.479    -.7115868     .333859
+    mortlat2 |  -.4967616   .3216058    -1.54   0.122    -1.127097    .1335742
+          vr |  -.2009515    .081485    -2.47   0.014    -.3606591   -.0412439
+       _cons |   2.070704   .3254676     6.36   0.000       1.4328    2.708609
+------------------------------------------------------------------------------
+
+. 
+. magins, dydx(white)
+command magins is unrecognized
+r(199);
+
+end of do-file
+
+r(199);
+
+. do "C:\Users\joshc\AppData\Local\Temp\STD4134_00000g.tmp"
+
+. 
+. probit approve white hrat obrat loanprc unem male married dep sch chist pubrec 
+> mortlat1 mortlat2 vr, r
+
+Iteration 0:  Log pseudolikelihood = -737.97933  
+Iteration 1:  Log pseudolikelihood = -603.64323  
+Iteration 2:  Log pseudolikelihood =    -600.34  
+Iteration 3:  Log pseudolikelihood = -600.33331  
+Iteration 4:  Log pseudolikelihood = -600.33331  
+
+Probit regression                                       Number of obs =  1,971
+                                                        Wald chi2(14) = 222.74
+                                                        Prob > chi2   = 0.0000
+Log pseudolikelihood = -600.33331                       Pseudo R2     = 0.1865
+
+------------------------------------------------------------------------------
+             |               Robust
+     approve | Coefficient  std. err.      z    P>|z|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+       white |   .5194155   .0962821     5.39   0.000     .3307061    .7081248
+        hrat |    .007656    .007176     1.07   0.286    -.0064088    .0217208
+       obrat |  -.0274755   .0063576    -4.32   0.000    -.0399362   -.0150149
+     loanprc |  -1.015171   .2486342    -4.08   0.000    -1.502485    -.527857
+        unem |  -.0367892   .0182586    -2.01   0.044    -.0725754    -.001003
+        male |  -.0372192   .1096639    -0.34   0.734    -.2521565     .177718
+     married |   .2665995   .0963134     2.77   0.006     .0778288    .4553702
+         dep |  -.0497158   .0391321    -1.27   0.204    -.1264134    .0269817
+         sch |   .0100712   .0930054     0.11   0.914    -.1722161    .1923585
+       chist |   .5843481   .0944234     6.19   0.000     .3992817    .7694145
+      pubrec |  -.7796671   .1287793    -6.05   0.000     -1.03207   -.5272644
+    mortlat1 |  -.1888639   .2667002    -0.71   0.479    -.7115868     .333859
+    mortlat2 |  -.4967616   .3216058    -1.54   0.122    -1.127097    .1335742
+          vr |  -.2009515    .081485    -2.47   0.014    -.3606591   -.0412439
+       _cons |   2.070704   .3254676     6.36   0.000       1.4328    2.708609
+------------------------------------------------------------------------------
+
+. 
+. margins, dydx(white)
+
+Average marginal effects                                 Number of obs = 1,971
+Model VCE: Robust
+
+Expression: Pr(approve), predict()
+dy/dx wrt:  white
+
+------------------------------------------------------------------------------
+             |            Delta-method
+             |      dy/dx   std. err.      z    P>|z|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+       white |   .0862611   .0158393     5.45   0.000     .0552167    .1173055
+------------------------------------------------------------------------------
+
+. 
+end of do-file
+
+. do "C:\Users\joshc\AppData\Local\Temp\STD4134_00000h.tmp"
+
+. logit approve white hrat obrat loanprc unem male married dep sch chist pubrec m
+> ortlat1 mortlat2 vr, r
+
+Iteration 0:  Log pseudolikelihood = -737.97933  
+Iteration 1:  Log pseudolikelihood = -635.00804  
+Iteration 2:  Log pseudolikelihood = -601.45252  
+Iteration 3:  Log pseudolikelihood = -600.54201  
+Iteration 4:  Log pseudolikelihood = -600.54094  
+Iteration 5:  Log pseudolikelihood = -600.54094  
+
+Logistic regression                                     Number of obs =  1,971
+                                                        Wald chi2(14) = 211.17
+                                                        Prob > chi2   = 0.0000
+Log pseudolikelihood = -600.54094                       Pseudo R2     = 0.1862
+
+------------------------------------------------------------------------------
+             |               Robust
+     approve | Coefficient  std. err.      z    P>|z|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+       white |   .9363679   .1745454     5.36   0.000     .5942651    1.278471
+        hrat |   .0129609   .0135648     0.96   0.339    -.0136256    .0395475
+       obrat |  -.0526883   .0123107    -4.28   0.000    -.0768169   -.0285597
+     loanprc |  -1.909871   .5076803    -3.76   0.000    -2.904906   -.9148357
+        unem |  -.0667335   .0353452    -1.89   0.059    -.1360088    .0025419
+        male |  -.0673187   .2067442    -0.33   0.745      -.47253    .3378926
+     married |   .5049836   .1836456     2.75   0.006     .1450449    .8649223
+         dep |  -.0908244   .0739945    -1.23   0.220     -.235851    .0542021
+         sch |   .0342309   .1766988     0.19   0.846    -.3120924    .3805542
+       chist |   1.065697   .1700434     6.27   0.000     .7324182    1.398976
+      pubrec |  -1.341983    .227403    -5.90   0.000    -1.787684    -.896281
+    mortlat1 |  -.3113546     .51842    -0.60   0.548    -1.327439    .7047299
+    mortlat2 |  -.8985049   .5674178    -1.58   0.113    -2.010623    .2136135
+          vr |  -.3494512     .15446    -2.26   0.024    -.6521872   -.0467152
+       _cons |   3.812995   .6340011     6.01   0.000     2.570375    5.055614
+------------------------------------------------------------------------------
+
+. 
+. margins, dydx(white)
+
+Average marginal effects                                 Number of obs = 1,971
+Model VCE: Robust
+
+Expression: Pr(approve), predict()
+dy/dx wrt:  white
+
+------------------------------------------------------------------------------
+             |            Delta-method
+             |      dy/dx   std. err.      z    P>|z|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+       white |   .0827044   .0152418     5.43   0.000     .0528311    .1125777
+------------------------------------------------------------------------------
+
+. 
+end of do-file
+
+. exit, clear

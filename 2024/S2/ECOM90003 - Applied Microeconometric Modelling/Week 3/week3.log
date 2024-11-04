@@ -1,0 +1,232 @@
+---------------------------------------------------------------
+      name:  <unnamed>
+       log:  C:\Users\joshc\OneDrive\Desktop\git\mae_unimelb\20
+> 24\S2\ECOM90003 - Applied Microeconometric Modelling\Week 3\w
+> eek3.log
+  log type:  text
+ opened on:   8 Aug 2024, 13:06:53
+
+. 
+. * Import Data
+. 
+. use CardKruegerTute3-Data, clear
+
+. 
+. 
+. *************************************************************
+> ***********
+. ********************************** Q6 ***********************
+> ***********
+. *************************************************************
+> ***********
+. 
+. 
+. //Necessary dummies
+. 
+. 
+. gen post=(time==2)
+
+. lab var post "Dummy: Post treatment"
+
+. 
+. gen NJ=(stater==1)
+
+. lab var NJ "Dummy: New Jersey"
+
+. 
+. gen NJ_post=NJ*post
+
+. label var NJ_post "Interaction"
+
+. 
+. 
+. //Regressions
+. 
+. * Need to use robust standard error, and use firms which are 
+> open in both periods. For robust standard errors just use the
+>  ",r" or ",robust" command when generating the regression
+. 
+. *Conditionally selecting observations is a bit more complicat
+> ed.
+. 
+. *Use egen: calculated values for a variable across rows in a 
+> specific group.
+. 
+. *bys = group_by and arrange_by function together
+. 
+. bys id: egen x1 = count(wage_st)  //Indicator variable for mi
+> ssing wages
+
+. 
+. // x1 = 2 if no missing wages, x1 = 1 if missing wage
+. 
+. bys id: egen x2=total(closed) // Indicator for restaurant bei
+> ng closed
+
+. //x2=0 if no closure, x=1 if closed in second wave
+. 
+. 
+. *Now generate the regressions
+. 
+. reg wage_st NJ post NJ_post if x1==2 & x2 ==0, robust
+
+Linear regression                               Number of obs  
+>    =        702
+                                                F(3, 698)      
+>    =     215.16
+                                                Prob > F       
+>    =     0.0000
+                                                R-squared      
+>    =     0.4028
+                                                Root MSE       
+>    =     .27729
+
+---------------------------------------------------------------
+> ---------------
+             |               Robust
+     wage_st | Coefficient  std. err.      t    P>|t|     [95% 
+> con                                                          
+>    f. interval]
+-------------+-------------------------------------------------
+> ---------------
+          NJ |  -.0406539   .0486359    -0.84   0.404    -.1361
+> 442                                                          
+>        .0548363
+        post |  -.0348485    .062339    -0.56   0.576     -.157
+> 243                                                          
+>         .087546
+     NJ_post |   .5040066   .0658959     7.65   0.000     .3746
+> 286                                                          
+>        .6333845
+       _cons |   4.653636   .0441513   105.40   0.000     4.566
+> 951                                                          
+>        4.740322
+---------------------------------------------------------------
+> ---------------
+
+. reg emptot NJ post NJ_post if (x1==2 & x2 ==0) | x2==1, robus
+> t
+
+Linear regression                               Number of obs  
+>    =        714
+                                                F(3, 710)      
+>    =       1.43
+                                                Prob > F       
+>    =     0.2329
+                                                R-squared      
+>    =     0.0089
+                                                Root MSE       
+>    =      9.486
+
+---------------------------------------------------------------
+> ---------------
+             |               Robust
+      emptot | Coefficient  std. err.      t    P>|t|     [95% 
+> con                                                          
+>    f. interval]
+-------------+-------------------------------------------------
+> ---------------
+          NJ |    -3.1129   1.588708    -1.96   0.050    -6.232
+> 027                                                          
+>        .0062267
+        post |  -2.126866   1.821137    -1.17   0.243    -5.702
+> 324                                                          
+>        1.448593
+     NJ_post |   2.325831   1.975718     1.18   0.240    -1.553
+> 118                                                          
+>         6.20478
+       _cons |   23.62687   1.492496    15.83   0.000     20.69
+> 663                                                          
+>         26.5571
+---------------------------------------------------------------
+> ---------------
+
+. 
+. 
+. * Generating chain dummies
+. label list
+chainr:
+           1 burger king
+           2 KFC
+           3 Roy Rogers
+           4 Wendys
+stater:
+           0 Pennsylvania
+           1 New Jersey
+time:
+           1 Wave 1 of survey
+           2 Wave 2 of survey
+
+. 
+. gen BK=(chainr==1)
+
+. gen KFC=(chainr==2)
+
+. gen RR=(chainr==3)
+
+. 
+. 
+. * Now put in dummy variables
+. 
+. 
+. reg emptot NJ post NJ_post co_owned BK KFC RR if (x1==2 & x2 
+> ==0) | x2==1, robust
+
+Linear regression                               Number of obs  
+>    =        714
+                                                F(7, 706)      
+>    =      43.53
+                                                Prob > F       
+>    =     0.0000
+                                                R-squared      
+>    =     0.1972
+                                                Root MSE       
+>    =     8.5616
+
+---------------------------------------------------------------
+> ---------------
+             |               Robust
+      emptot | Coefficient  std. err.      t    P>|t|     [95% 
+> con                                                          
+>    f. interval]
+-------------+-------------------------------------------------
+> ---------------
+          NJ |  -2.399788   1.410026    -1.70   0.089    -5.168
+> 134                                                          
+>        .3685582
+        post |  -2.126866   1.596575    -1.33   0.183    -5.261
+> 469                                                          
+>        1.007738
+     NJ_post |   2.325831   1.742213     1.33   0.182    -1.094
+> 708                                                          
+>         5.74637
+    co_owned |  -1.191744   .6611047    -1.80   0.072     -2.48
+> 971                                                          
+>        .1062225
+          BK |   1.235364   1.035725     1.19   0.233    -.7981
+> 056                                                          
+>        3.268833
+         KFC |  -9.204407   1.000226    -9.20   0.000    -11.16
+> 818                                                          
+>       -7.240633
+          RR |  -.5329696   1.163739    -0.46   0.647    -2.817
+> 773                                                          
+>        1.751834
+       _cons |   25.00168   1.513719    16.52   0.000     22.02
+> 975                                                          
+>        27.97361
+---------------------------------------------------------------
+> ---------------
+
+. 
+end of do-file
+
+. do "C:\Users\joshc\AppData\Local\Temp\STD7f7c_00000r.tmp"
+
+. save Tute_answer_w3
+file Tute_answer_w3.dta saved
+
+. 
+end of do-file
+
+. exit, clear

@@ -1,0 +1,292 @@
+---
+title: "Week 4 Tutorial"
+author: 'Josh Copeland'
+subtitle: 'ECON90033 - 2023 Semester 2 '
+date: "Completed on 20 August 2023"
+
+
+output: 
+  html_document:
+    theme: journal
+---
+
+Libraries required for this tutorial
+
+```{r setup, include = FALSE}
+
+library(tidyverse)
+library(readxl)
+library(lubridate)
+library(forecast)
+library(knitr)
+
+```
+
+# Exercise 1
+
+### A) simulate a white noise by drawing a random sample of 150 from the standard normal distribution. Name this series eps.
+
+To make simulated series reproducible, you need to precede the rnorm() function with the set.seed() function.
+
+
+```{r e1a, include = TRUE}
+
+set.seed(11072023)
+eps <- ts(rnorm(150, mean = 0, sd = 1), start = 1)
+
+
+```
+
+### B) Verify this sequence is stationary by graphing it.
+
+As expected, this series fluctuates around zero with constant variance.
+
+
+```{r e1b, include = TRUE}
+
+ts.plot(eps, col = "blue")
+abline(h = 0)
+
+
+```
+
+### C) Calculated and plot SACF and SPACF of eps. Use the rule of thumb for the lag length.
+
+In general, the largest lag (s) should be relatively small compared to the sample size.
+
+Rule of thumb: s = min(10, t/5) for non-seasonal data and s = min(2S, t/5) for seasonal data (S = number of seasons).
+
+Note that for eps there are 150 observations, therefore s = min(10, 30). We use 10 lags.
+
+Note that for these acf and pacf plots, the blue dashed lines are the approximate representation of Bartlett's test.
+
+Bartlett's test:
+
+- H_o: correlation coefficient = 0
+
+- H_a: correlation coefficient is different to 0
+
+For a white noise process, the band between them is expected to contain 95% of the sample acf and pacf coefficient. If pretty much everything is contained within them then this series is white noise.
+
+
+```{r e1c, include = TRUE}
+
+acf(eps, lag.max=10)
+pacf(eps, lag.max = 10)
+
+
+```
+
+
+
+### D) Perform the Box-Pierce and Ljung-Box tests on eps at the 5% significance level
+
+Both are completed with the Box.test() function. The fitdf argument refers to the number of degrees of freedom to be subtracted if X is a series of residuals.
+
+We cannot reject the null hypothesis for either test. Therefore, we can maintain that there is no 1st, 2nd, ..., 10th order autocorrelation.
+
+
+```{r e1d, include = TRUE}
+
+Box.test(eps, lag = 10, type = "Box-Pierce", fitdf = 0)
+Box.test(eps, lag = 10, type = "Ljung-Box", fitdf = 0)
+
+
+```
+
+
+# Exercise 2
+
+## A)Import the data t2e2 and save it as t4e2. Convert the PRICE and DIVIDEND numeric vectors into R time series objects.
+
+Both graphs seem to show the series oscillated around some contant.
+
+```{r e2a, include = TRUE}
+
+ts_e2 <- function(x) {
+  ts(x, start = c(1900,1), end = c(2016,9), frequency = 12)
+}
+
+
+t4e2 <- read_excel("C:/Users/joshc/Documents/2023S2/ECON90033/Tutorials/Week 4/t2e2.xlsx")
+
+e2 <- t4e2 %>%
+  select(Date, PRICE,DIVIDEND) %>%
+  mutate(re = 100*(log(PRICE) - lag(log(PRICE)))) %>%
+  mutate(rd = 100*(log(DIVIDEND) - lag(log(DIVIDEND)))) %>%
+  select(re, rd) %>% 
+  map(~ ts(.x)) %>% 
+  map(ts_e2) %>% 
+  map(na.omit)
+
+
+ts.plot(e2[["re"]], main = "Log returns on ES equities", col = "blue")
+abline(h=0)
+
+ts.plot(e2[["rd"]], main = "Log returns on ES dividends", col = "blue")
+abline(h=0)
+
+```
+
+
+### B) Compute and interpret the SACF and SPACF of equity returns and dividend returns for up to 6 lags
+
+The X-axes look weird in these graphs, but that's because the acf/pacf functions always measure the lags in terms of years regardless of the actuall frequency.
+
+Because we have monthly data, and one month is 1/12 year, the scale is from 0 (1/12) up to 6 months (6/12 = 0.5).
+
+Both functions have a significant spake at the first lag. SACF has a significant lag at lag 5. SPACF at lags 2 and 5.
+
+Remember, if they breach the blue line they are significantly not 0 (reject Bartlett's H_a)
+
+```{r e2bi, include = TRUE}
+
+
+
+acf(e2[["re"]], lag.max = 6)
+pacf(e2[["re"]], lag.max = 6)
+
+
+```
+Now repeat this process for dividends.
+
+```{r e2bii, include = TRUE}
+
+
+
+acf(e2[["rd"]], lag.max = 6)
+pacf(e2[["rd"]], lag.max = 6)
+
+
+```
+
+
+For dividends, all six sample autocorrelation coefficient are significant at the 5% level and share an exponentially decaying pattern.
+
+for SPACF, the 1st and 4th lags are significant. The latter's significance could have something to do with the quarterly frequency of the time series.
+
+
+### C) Perform the Box-Pierce and Ljung-Box tests on equity returns and dividend returns for autocorreltaion of orders 1-6 at the 5% significant level.
+
+For these tests, the null hypothesis is that there is no autocorrelation.
+
+```{r e2ci, include = TRUE}
+
+
+Box.test(e2[["re"]], lag = 6, type = "Box-Pierce", fitdf = 0)
+Box.test(e2[["re"]], lag = 6, type = "Ljung-Box", fitdf = 0)
+
+
+```
+
+The p-values are tiny, therefore we can reject the null hypothesis. Equities have some autocorrelation of orders 1 to 6. This is reasonable given the spike we saw in the SACF.
+
+What about for dividends?
+
+
+```{r e2cii, include = TRUE}
+
+
+Box.test(e2[["rd"]], lag = 6, type = "Box-Pierce", fitdf = 0)
+Box.test(e2[["rd"]], lag = 6, type = "Ljung-Box", fitdf = 0)
+
+
+```
+
+We also reject the null hypothesis, which is unsurprising given what we already observed about the SACF & SPACF.
+
+
+### D) Estimate an AR(2) model of equity returns
+
+```{r e2d, include = TRUE}
+
+
+ar2ma0_re <- Arima(e2[["re"]], c(2,0,0))
+summary(ar2ma0_re)
+
+```
+
+
+This looks pretty normal, but what's the significance of the "mean" components of the printout?
+
+### E) Estimate an MA(1) model of equity returns
+
+Unlike finite order AR models, MA and ARMA models cannot be estimated directly by OLS due to the unobservable lagged error term(s). Instead its a two-step process using OLS, or one step using some non-linear algorithm. 
+
+The Arima function does the latter.
+
+```{r e2e, include = TRUE}
+
+
+ar0ma1_re <- Arima(e2[["re"]], c(0,0,1))
+summary(ar0ma1_re)
+
+```
+
+### F) Consider the ARMA(1,1) model of equity returns
+
+
+```{r e2f, include = TRUE}
+
+
+ar1ma1_re <- Arima(e2[["re"]], c(1,0,1))
+summary(ar1ma1_re)
+
+```
+
+### G) Given each of these models, which one performs the best?
+
+To do this, use the model selection criteria provided on the printouts.
+
+They are:
+- the Akaike Information Criterion (AIC)
+- the Corrected Akaike Information Criterion (AICc)
+- the Bayesian information criterion (BIC, also known as the Schwartz Information Criterion, SIC).
+
+Assuming each model has (a) the same dependent variable and (b) is estimated using the same sample, we can rank alternative model specifications. They work similarly to R^2 by considering: how well models fit to data and the cost in terms of sample size and number of parameters to be estimated from the sample.
+
+However, you can't compare across criteria, because they measure different things. Also, the lower the score the better.
+
+This screenshot from the tutorial summarises all of the criteria, what are the conclusions to take from it:
+- AIC & AICc favour the AR(2) specification, while BIC favours MA(1)
+
+```{r e2g, echo=FALSE, fig.cap="Source: Tutorial 4 pdf", out.width = '50%'}
+knitr::include_graphics("criteria_comparison.png")
+```
+
+
+### H) Find the best model for re by running auto.arima() and minimising AICc
+
+
+```{r e2h, include = TRUE}
+
+
+best_arima <- auto.arima(e2[["re"]], ic = "aicc",
+                         stepwise = FALSE, approximation = FALSE, trace = TRUE)
+
+summary(best_arima)
+
+
+```
+
+Before diving into the output, lets understand what these other arguments do:
+
+- stepwise: if TRUE, a relatively fast stepwise selection if performed
+
+- approximate: if TRUE, model selection is based on approximation.
+
+These two options basically just speed up coming up with a model, so unless you really can't bear to wait, you should turn them off.
+
+### I) Correctly specified ARMA models should have white noise resifuals. Check if this is the case from what you just generated.
+
+
+
+```{r e2i, include = TRUE}
+
+
+checkresiduals(best_arima, lag = 10, test = "LB")
+
+
+```
+
+There is some autocorrelation from this output, and therefore the dyn amics in the observed time series are not "perfectly" captured with this ARMA model. However, we shouldn't reject it automatically, as it might still be our best option to model monthly returns on equities in the US.

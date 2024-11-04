@@ -1,0 +1,177 @@
+---
+title: "Econometrics 2 capstone final report models and analysis"
+author: "Josh Copeland, Jocelyn Koswara and Ryan Luo"
+date: "2024-10-1"
+output: html_document
+---
+
+```{r setup_include_false, include=FALSE}
+library(tidyverse)
+library(AER)
+library(stargazer)
+library(lmtest)
+library(sandwich)
+library(rvest)
+library(writexl)
+library(openxlsx)
+```
+
+```{r setup_include, include=FALSE}
+
+#Packages used for this script:
+
+# - tidyverse
+# - AER
+# - stargazer
+
+```
+
+```{r data_import_models}
+
+data <- read_csv("model_data.csv")
+
+```
+
+
+# Key models/output
+
+```{r models}
+
+#################################### MODELS ####################################
+
+# linear regression model
+m1 <- lm(depression_dummy ~ basic_access_dummy, data = data)
+
+
+# Multiple linear regresion model
+m2 <- lm(depression_dummy ~ basic_access_dummy + sex_dummy + age + not_christian_dummy + rural_dummy, data = data)
+
+
+# First stage 2SLS model
+m3 <- lm(basic_access_dummy ~ drinking_source_distance_mins + sex_dummy + age + not_christian_dummy + rural_dummy,
+                  data = data)
+
+# Second stage 2SLS model
+m4 <- ivreg(depression_dummy ~ basic_access_dummy + sex_dummy + age + not_christian_dummy + rural_dummy |
+      sex_dummy + age + not_christian_dummy + rural_dummy + drinking_source_distance_mins, data = data)
+
+
+```
+# Formatting output
+
+```{r formatting_output}
+
+#################################### OUTPUT TABLES ##############################
+
+
+key_results <- stargazer(m1,
+                         m2,
+                         m3,
+                         m4, 
+                         type = "html",
+                         title = "Table 2: Model estimates",
+                           se = list(
+                          sqrt(diag(vcovHC(m1))),
+                          sqrt(diag(vcovHC(m2))),
+                          sqrt(diag(vcovHC(m3))),
+                          sqrt(diag(vcovHC(m4)))
+                          ),
+                        out = "Key_Results.html"  
+                                
+  )
+
+
+##################### AUTOMATING OUTPUTTING TABLES TO XLSX FILE ################
+
+key_results_table <- read_html("Key_Results.html") %>% 
+    html_table(fill = TRUE) %>% 
+    pluck(1) %>% 
+    filter(if_any(c(X1, X2, X3), ~ . != ""))
+
+write_xlsx(key_results_table, "key_results_table.xlsx")
+
+```
+
+
+
+# Robustness checks
+
+## Changing definitions of water access
+
+Ultimately, our chosen definition of water access has been chosen arbitrarily from UNICEF's taxonomy of access. If our results are robust, the size of our estimators should decrease as we move from the lowest ("no service") to highest ("safely managed") level of water access. The better the access, the greater an impact it should have on reducing the incidence of mental health issues.
+
+```{r rc_water_check}
+
+################################## CREATING MODELS #############################
+
+
+#No service
+m5 <- ivreg(depression_dummy ~ no_service_dummy + sex_dummy + age + not_christian_dummy + rural_dummy |
+      sex_dummy + age + not_christian_dummy + rural_dummy + drinking_source_distance_mins, data = data)
+
+
+# Unimproved
+m6 <- ivreg(depression_dummy ~ unimproved_dummy + sex_dummy + age + not_christian_dummy + rural_dummy |
+      sex_dummy + age + not_christian_dummy + rural_dummy + drinking_source_distance_mins, data = data)
+
+
+
+# Limited
+m7 <- ivreg(depression_dummy ~ limited_dummy + sex_dummy + age + not_christian_dummy + rural_dummy |
+      sex_dummy + age + not_christian_dummy + rural_dummy + drinking_source_distance_mins, data = data)
+
+
+# Basic access
+m8 <- ivreg(depression_dummy ~ basic_access_dummy + sex_dummy + age + not_christian_dummy + rural_dummy |
+      sex_dummy + age + not_christian_dummy + rural_dummy + drinking_source_distance_mins, data = data)
+
+
+# Safely managed
+m9 <- ivreg(depression_dummy ~ safely_managed_dummy + sex_dummy + age + not_christian_dummy + rural_dummy |
+      sex_dummy + age + not_christian_dummy + rural_dummy + drinking_source_distance_mins, data = data)
+
+
+
+################################# COMPARING OUTPUT #############################
+
+rc_water_def_results <- stargazer(
+          m5,
+          m6,
+          m7,
+          m8,
+          m9,
+          type = "html",
+          title = "Table X: Changing water definition estimates",
+          se = list(
+          sqrt(diag(vcovHC(m5))),  
+          sqrt(diag(vcovHC(m6))),
+          sqrt(diag(vcovHC(m7))),
+          sqrt(diag(vcovHC(m8))),
+          sqrt(diag(vcovHC(m9)))
+          ),
+          out = "RC_Water_Def_Results.html"
+          )
+
+##################### AUTOMATING OUTPUTTING TABLES TO XLSX FILE ################
+
+rc_water_def_results_table <- read_html("RC_Water_Def_Results.html") %>% 
+    html_table(fill = TRUE) %>% 
+    pluck(1) %>% 
+    filter(if_any(c(X1, X2, X3, X4,X5, X6), ~ . != ""))
+
+write_xlsx(rc_water_def_results_table, "rc_water_def_results_table.xlsx")
+
+
+
+
+##################### AUTOMATING OUTPUTTING TABLES TO XLSX FILE ################
+
+key_results_table <- read_html("Key_Results.html") %>% 
+    html_table(fill = TRUE) %>% 
+    pluck(1) %>% 
+    filter(if_any(c(X1, X2, X3), ~ . != ""))
+
+write_xlsx(key_results_table, "key_results_table.xlsx")
+
+
+```

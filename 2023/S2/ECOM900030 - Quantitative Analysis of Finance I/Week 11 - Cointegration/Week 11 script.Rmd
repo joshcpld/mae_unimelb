@@ -1,0 +1,185 @@
+---
+title: "Week 11 Tutorial"
+author: 'Josh Copeland'
+subtitle: 'ECON90033 - 2023 Semester 2 '
+date: "Completed on 16 October 2023"
+
+
+output: 
+  html_document:
+  theme: journal
+---
+  
+```{r setup, include = FALSE}
+
+library(tidyverse)
+library(readxl)
+library(lubridate)
+library(forecast)
+library(knitr)
+library(vars)
+library(bruceR)
+library(urca)
+
+```
+
+## Exercise 1
+
+### a) Import the data file, plot the annual SR and LR interest rates in Australian from 1970 to 2021 and comment on the figures.
+
+
+```{r e1a, include = TRUE}
+
+e1 <- read_excel("C:/Users/joshc/Documents/2023S2/ECON90033/Tutorials/Week 11/t11e1.xlsx")
+
+
+SR <- e1 %>% 
+  pull(SR) %>% 
+  ts(frequency = 1, start = 1970, end = 2021)
+
+LR <- e1 %>% 
+  pull(LR) %>% 
+  ts(frequency = 1, start = 1970, end = 2021)
+
+plot.ts(SR, ylab = "%", col = "red")
+lines(LR, col = "darkblue", lty = 2)
+
+```
+
+
+### b) perform the ADF and KPSS tests on the level and first differences. What conclusions do you draw about the order of integration?
+
+The time series plot suggest that both variables ought to use Model 3 and Model 2 in the tests for their levels and first differences respectively.
+
+The results show:
+
+* ADF:
+  
+  - For the levels, the null hypothesis of a unit root in maintained even at the 10% level. However, there are a few significant spikes in the residual correlograms. You can adjust the lags gradually, but ultimately we retain the same conclusion.
+  
+  - For the differences, we reject the null hypothesis of a unit root at the 1% significance level. There remains some 5th order serial correlation in the LR variable's residuals.
+  
+  
+* KPSS:
+
+  - Same as ADF, we find evidence of a unit root in the level. For SR, we reject the null hypothesis of stationarity at the 5% significance level where we do the same for the LR at the 2.5% level.
+  
+  - We're able to maintain the null hypothesis of no unit roots even at the 10% level for the differenced series for both variables.
+  
+  
+Therefore, we're able to conclude that these variables are stationary integrated at order 1.
+
+```{r e1b, include = TRUE}
+
+#library(urca)
+
+#ADF tests
+
+adf.SR <- ur.df(SR, type = "trend", selectlags = "BIC")
+summary(adf.SR)
+plot(adf.SR)
+
+adf.LR <- ur.df(LR, type = "trend", selectlags = "BIC")
+summary(adf.LR)
+plot(adf.LR)
+
+adf.DSR <- ur.df(diff(SR), type = "drift", selectlags = "BIC")
+summary(adf.DSR)
+plot(adf.DSR)
+
+adf.DLR <- ur.df(diff(LR), type = "drift", selectlags = "BIC")
+summary(adf.DLR)
+plot(adf.DLR)
+
+
+#KPSS tests
+
+kpss.SR = ur.kpss(SR, type = "tau", lags = "short")
+summary(kpss.SR)
+
+
+kpss_LR = ur.kpss(LR, type = "tau", lags = "short")
+summary(kpss_LR)
+
+
+kpss_DSR = ur.kpss(diff(SR), type = "mu", lags = "long")
+summary(kpss_DSR)
+
+
+kpss_DLR = ur.kpss(diff(LR), type = "mu")
+summary(kpss_DLR)
+
+
+```
+
+
+### c) Consider a VAR model wit ha constant of p and m, and determine the optimal lag length wit the VARselect() function of the vars package.
+
+<br>
+
+This call of VARselect() tells us that HQ, SC and FPE take their smallest values for 1 lag, but AIC selected 10 lags.
+
+To test which is optimal, we need to test the residuals for first and second order autocorrelation with the Breusch-Godfrey LM test. The results of this test show that the p-value is suffuciently large to maintain teh VAR(1) specification.
+
+The VAR printout itself tells us some other important information:
+
+* The estimated roots of the characteristic polynomial are all smaller than 1 in absolute terms. Therefore, this VAR is stable.
+
+* Both of the estimated equations of VAR(1) are reasonable as they have large and significant adjusted R^2 values.
+
+```{r e1c, include = TRUE}
+
+#library(vars)
+
+data = cbind(SR, LR)
+VARselect(data, type = "const")
+
+#Testing residuals
+
+var1 <- VAR(data, p = 1, type = "const")
+
+serial.test(var1, lags.bg = 2, type = "BG")
+
+summary(var1)
+
+
+```
+
+### d) Use the estimated VAR(1) model to forecast ST and LR 1-4 years ahead.
+
+The dark and light blue bands represent 80% and 95% rpediction bands respectively.
+
+```{r e1d, include = TRUE}
+
+#library(forecast)
+
+var1_ea <- forecast(var1, h = 4)
+
+print(var1_ea)
+autoplot(var1_ea)
+
+
+```
+
+
+### e) Use the VAR(1) model to test for Granger causality between the SR and LR at the 5% significance level.
+
+<br>
+
+This test confirms the intuitive relationship between the LR and SR interest rate. The null hypothesis of the Granger causality tests is that X has no impact on Y for both the F-test and Chi-square tests.
+
+Both tests the LR is causing SR (i.e. LR -> SR) at the 1% level, but SR is not causing LR (i.e. SR -/> LR). Therefore, this implies SR is an endogenous variable, whereas LR appears to be exogenous.
+
+Occasionally, the F and Chi-square contradict and you'll need to make a judgement call on which test to rely on: the prior assumes normality while the other does not.
+
+To help make this judgement, conduct a normality test on the residuals. The p-value of the JB test is very small, indicating normality can be rejected, which is attributable to both skewness and kurtosis. In a situation where the chi-square and f-tests contradict, you would want to lean on the chi-square test because normality does not apply.
+
+
+```{r e1e, include = TRUE}
+
+# library(bruceR)
+granger_causality(var1)
+
+normality.test(var1)
+
+```

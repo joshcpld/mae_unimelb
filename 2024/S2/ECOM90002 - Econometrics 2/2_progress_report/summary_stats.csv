@@ -1,0 +1,9 @@
+variable,mean,sd,min,max
+depression_dummy,0.31,0.46,0,  1
+basic_access_dummy,0.76,0.43,0,  1
+drinking_source_distance_mins,15.64,18.02,0,240
+drinking_source_distance_length,11.27,64.36,0,800
+sex_dummy,0.55,0.5,0,  1
+age,39.09,18.73,1,109
+not_christian_dummy,0.34,0.47,0,  1
+rural_dummy,0.65,0.48,0,  1

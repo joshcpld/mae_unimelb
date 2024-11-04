@@ -1,0 +1,114 @@
+## f) Estimate the GARCH(1,1) model for the returns of the Dow Jones Industrial Index as specified in the assignment printout.
+
+## Consider your printout. Comment on the coefficients and on their significance based on robust standard errors. Briefly evaluate the weighted Ljung-Box tests, the weighted ARCH LM tests, the Nyblom stability tests, and the sign tests. For each group of these tests, state the null and alternative hypotheses, the statistical decision, and the conclusion. (8 marks)
+
+<br>
+
+Models with GARCH errors are estimated using two steps.
+
+The first is to estimate the mean equation:
+
+* Begin this process by observing the correlograms for the log returns for lags 1-10.From this exercise there is no obvious ARMA candidacy using the Box-Jenkins methodology, so we use the auto.arima() function to determine the best fit.
+
+* This process chooses ARIMA(3,0,2) as the preferred model
+
+* After seeing details of the ARIMA(3,0,2) model, conducting significance tests on its terms and applying the Ljung-Box test, we find out the following about the model:
+
+  - All of the terms in this model are significant, supporting the specification provided by auto.arima()
+  
+  - The Ljung-Box test on the residuals of this ARIMA model rejects the null hypothesis, confirming that there is no sign of autocorrelation or orders 1 to 10 at any reasonable significance level.
+  
+* Therefore, we can accept the ARIMA(3,0,2) model for the mean of {R}.
+
+```{r e1fi, include = TRUE}
+
+acf(r, lag.max = s)
+pacf(r, lag.max = s)
+
+best.arima <- auto.arima(r, seasonal = FALSE, ic = "aicc",
+approximation = FALSE, stepwise= FALSE, trace = TRUE)
+
+summary(best.arima)
+coeftest(best.arima, df = best.arima$nobs - length(best.arima$coef))
+
+k <- length(best.arima$coef)
+
+Box.test(best.arima$residuals, type = "Ljung-Box", lag = 10, fitdf = k)
+
+
+```
+
+<br>
+
+After determining the mean equation we need to establish the case for and model GARCH errors. To do this:
+
+* We need to establish if an ARCH variance equation is warranted by the data, which we do by performing the ARCH Lagrange Multiplier (LM) test. These tests for lags 1, 2, 3, 4, and 5 all support rejecting the null hypothesis as all the p-values are practically zero that there are no ARCH errors.
+
+Then, in order to get an idea about the structure of the variance equation, we observe the correlograms of the squared residuals from the ARIMA(3,0,2). They tell us that every lag of the SACF and SPACF is signficant, bar the 10th. This tells us that its best to use a GARCH(1,1) model for the variance equation and to experiment from there.
+
+After fitting this GARCH(1,1) model, we inerpret the output as follows:
+
+* For the estimated model coefficients:
+
+  - This section assesses the significance of all the terms in the mean and variance equation using both regular standard errors based on the Maximum Likelihood (ML) and normal distribution, as well as robust standard errors based on the Quasi Maximum Likelihood.
+  
+  - The null hypothesis for these tests on the model coefficient is that their value is equal to zero, whereas the alternate hypothesis is that they are not equal to zero  
+  - Whether we use normal or robust standard errors, all of the terms in this ARMA(3,2)-GARCH(1,1) reject the null hypothesis and are statistically significant (i.e. non-zero). 
+  
+  - Therefore, there is no immediate reason to consider changing any of the terms in this model.
+
+* For the Weighted LB tests:
+  
+  - The null hypothesis for these tests is that there is no autocorrelation of (i) order 1, (ii) orders 1-2 and (iii) orders 1-5 in the standardised squared residuals. The alternate hypothesis is that there is autocorrelation for any given order in the standardised squared residuals.
+  
+  - The p-values are all quite large in these tests, and none of them are sufficiently small to reject the null hypothesis - even at the 10% level. Therefore we maintain the null hypothesis that there is no autocorrelation of (i) order 1, (ii) orders 1-2 and (iii) orders 1-5 in the standardised squared residuals.
+  
+  - This means that the ARMA(3,2)-GARCH(1,1) model is adequate for modelling the daily log returns for the Down Jones Industrial Index.
+  
+* For the Weighted ARCH LM tests:
+
+  - The null hypothesis is that there are no ARCH effects left in the residuals. The alternate hypothesis is that there are ARCH effects left in the residuals.
+  
+  - The p-values are all quite large with test for ARCH effects at lags 2, 4 and 6. Therefore, we maintain the null hypothesis that there are no ARCH effects left in the residuals.
+  
+  - This result adds to the evidence given by the results for the weighted LB tests, that the ARMA(3,2)-GARCH(1,1) model is adequate for modelling the daily log returns for the Down Jones Industrial Index.
+  
+* For the Nyblom stability test:
+
+  - The null hypothesis for the Nyblom stability test is that the parameters given for the chosen model are stable over time. The alternate hypothesis is that they are unstable.
+  
+  - When evaluating the Nyblom stability test you need to consider the joint and individual statistics.
+  
+  - The joint statistic is 3.2, which is above the joint statistic 1% critical value of 2.82. Therefore, there we reject then null hypothesis for the model as a whole.
+  
+  - However, for the individual statistics, only the beta1 parameters in the variance equation is sufficiently large to merit rejecting the null hypothesis at the 5% level (as its test statistics is between the 5% and 1% individual statistic critical values). No other test statistics from nay other individual parameters are sufficient large to reject, even at the 10% level.
+  
+  - Therefore, there is evidence join parameter instability in this model. Given beta1 in the variance equation is the only individual parameter indicating instability, this might be a significant driver of this result.
+  
+* For the sign tests:
+
+  - The null hypothesis is that negative and positive returns do not have different impact on future volatility. The alternate hypothesis is that negative and positive returns have different impact on future volatility. This test is conducted joint, and separately to determine if the effect is negatively or positively biased.
+  
+  - Jointly, the p-value is sufficiently small to reject the null hypothesis that negative and positive returns have do not have different impacts on volatility. This is also the case for the test specifically for positive sign bias: we reject the null hypothesis. However, this is not the case for the negative sign bias test.
+  
+  - Overall, there is evidence to suggest the positive returns have a different impact on future volatility compared to negative returns.
+
+
+```{r e1fii, include = TRUE}
+
+for (h in 1:5) {
+print(ArchTest(best.arima$residuals, lags = h))
+}
+
+acf(best.arima$residuals^2, lag.max = 10, plot = TRUE)
+pacf(best.arima$residuals^2, lag.max = 10, plot = TRUE)
+
+spec_v1 = ugarchspec(mean.model = list(armaOrder = c(3,2), include.mean = TRUE),
+                     variance.model = list(model = "sGARCH", garchOrder = c(1,1)),
+                     distribution.model = "norm")
+
+estimate_v1 <- ugarchfit(spec = spec_v1, data = r)
+
+print(estimate_v1)
+
+```

@@ -1,0 +1,363 @@
+---
+title: "ECON90033 - S2 2023 - Assignment 2"
+author: 'Tutorial class: Thursday 16:15'
+subtitle: 'Josh Copeland (SID: 1444772)'
+date: "Generated on `r format(Sys.time(), '%B %d, %Y')`"
+
+
+output: 
+  html_document:
+    theme: journal
+---
+
+```{r setup, include = FALSE}
+
+library(tidyverse)
+library(readxl)
+library(lubridate)
+library(forecast)
+library(knitr)
+library(xts)
+library(tsbox)
+library(urca)
+library(pastecs)
+library(moments)
+library(e1071)
+library(rugarch)
+library(lmtest)
+library(FinTS)
+library(tseries)
+
+options(scipen=999)
+
+```
+
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+
+# Exercise 1
+
+## a) Launch RStudio, create a new project and script, and name both a2e1. Import the data from the a2e1.xlsx file to RStudio, save it as a2e1.RData, and attach this data set to your R project. Create an xts objects of the DJ series. 
+
+## Plot the Dow Jones index and its percentage log returns (r) and comment on any volatility clustering.
+
+## Once charted, remove NA values from the series and use this series for all subsequent questions. (2 marks)
+
+<br>
+
+There are three major periods, or clusters, of volatility in the chart shown below for the returns of the Dow Jones Industrial Index: 
+
+ * There was a period of sustained, moderate volatility in returns at the beginning of the time series from around 2000 to around 2003. This is likely due to the effects of the dotcom bubble of that period.
+ 
+ * There is a period of more intense volatility around 2008, likely due to the effects of the Global Financial Crisis.
+ 
+ * There is also another period of significant volatility in 2020, likely due to the COVID-19 outbreak.
+ 
+ <br>
+ 
+ There are other periods of less intense volatility through the 2010s, likely in part driven by different periods of the European Sovereign Debt Crises, but these are not as significant as those listed above.
+ 
+ <br>
+
+```{r e1a, include = TRUE}
+
+DJ <- read_excel("C:/Users/joshc/Documents/2023S2/ECON90033/Assignments/Assignment 2/a2e1.xlsx")
+
+first <- as.Date("2000-01-03") - as.Date("2000-01-01") + 1
+last <- as.Date("2023-08-31") - as.Date("2023-01-01") + 1
+
+date_continuous <- data.frame(Date = seq(as.Date("2000-01-03"), as.Date("2023-08-31"), by = 1))
+
+DJ <- left_join(date_continuous, DJ, by = "Date")
+  
+DJ <- DJ %>% 
+  pull(DJ) %>% 
+  ts(start = c(2000, first), end = c(2020, last), frequency = 365)
+
+r <- diff(log(DJ)) * 100
+
+plot.ts(DJ, main = "Chart 1: Dow Jones Industrial Index", ylab = "Index", col = "blue")
+
+plot.ts(r, main = "Chart 2: Down Jones Industrial Index daily log returns", ylab = "%", col = "blue" )
+
+r <- na.remove(r)
+
+```
+
+## b) Perform the ADF and KPSS tests on r. What conclusion do you draw from these tests about the order of integration of the percentage log returns of the Dow Jones Industrial Index? (4 marks)
+
+<br>
+
+The code below shows the results of the Augmented Dicky Fuller (ADF) and Kwiatkowski–Phillips–Schmidt–Shin (KPSS) tests on the daily log returns of the Dow Jones industrial index, as well as the difference of this series. We need to provide test on the daily log returns and its difference as these tests are only able to detect a single unit root. Without testing for the differenced series as well, we might incorrectly assume there are no unit roots when there are actually two.
+
+
+As daily log returns fluctuates around zero (Chart 2), we use "Model 1" when developing the ADF and KPSS models. Practically, this means we set the "type" parameter to "none" and "mu" for the ADF and KPSS tests respectively.
+
+The outcomes of these tests show that:
+
+* ADF:
+
+	- The test statistic when conducted on daily log returns is equal to -47.41, which is much smaller than the 1% tau1 critical value of -2.58. This allows us to reject the null hypothesis that there is a unit root, which implies the series might be stationary. Additionally, the residuals seem to be serially uncorrelated by looking at the autocorrelations and partial autocorrelations of the residuals. Although some of the residual partial autocorrelation lags are statistically significant, there is no systematic pattern or trend to them, therefore it is safe to take the test statistic at face value.
+	
+	- When we conduct the same test on the differenced daily log returns using the same number of lags we receive a similar result. The test statistic of -82.03 is smaller than the 1% tau1 value of -2.58, allowing us to reject the null hypothesis again that there is a unit root.
+
+* KPSS:
+
+  - The test statistic received from the KPSS test is 0.41, which is in between the 10% and 5% critical values of 0.35 and 0.46 respectively. Therefore, we can only maintain the stationarity null hypothesis at the 5% significance level. This implies the series might be stationary at the 5% significance level, but not at the 10% level.The residuals also seem to be serially uncorrelated. While there are some statistically significant partial autocorrelations, there is no systematic pattern or trend to them so we can take the test result at face value.
+	
+  - When we conduct the KPSS test on the differenced series we receive a test statistic of 0.01, which is smaller than all of the critical values provided. Therefore, we can maintain the null hypothesis that there are no unit roots for this differenced series, even at the 10% level. 
+
+Taking all of these test results together we come to the following conclusion:
+
+* Given the KPSS test rejects the null hypothesis at the 10%, there is some evidence of contradiction between the KPSS and ADF tests. However, despite this conflict at the 10% significance level, we can conclude at the 5% significance level that the daily log returns of the Dow Jones Industrial index is stationary at the order of integration zero.
+
+* We were able to confirm this because conducting tests on both the daily log returns series and its differenced series both confirmed stationarity at the 5% level. Furthermore, we are comfortable with this result because the residuals of each test show they are serially uncorrelated.
+
+
+```{r e1b, include = TRUE}
+
+#ADF tests
+
+r_ADF <- ur.df(r, type = "none", selectlags = "BIC")
+
+summary(r_ADF)
+plot(r_ADF)
+
+r_diff <- diff(r) %>% 
+  na.omit()
+
+r_diff_ADF <- ur.df(r_diff, type = "none", selectlags = "BIC")
+
+summary(r_diff_ADF)
+
+#KPSS tests
+
+r_KPSS <- ur.kpss(r, type = "mu", lags = "long")
+
+summary(r_KPSS)
+plot(r_KPSS)
+
+r_diff_KPSS <- ur.kpss(r_diff, type = "mu", lags = "long")
+
+summary(r_diff_KPSS)
+
+```
+
+
+## c) Plot the correlogram of r and r^2. What do they suggest about autocorrelation in the returns and in the squared returns on the Dow Jones Industrial Index? (2 marks)
+
+<br>
+
+The correlolgram of the daily log returns suggest there is very little autocorrelation, or weak dependence in the mean of the series. Therefore, its appropriate to assume a constant conditional mean for this series whe modelling it. If there were many significant lags, we would consider using the Box-Jenkins methodology, or the auto.arima() function to determine which univariate econometric model to apply.
+
+Conversely, The correlogram of the squared daily log returns indicates there is a substantial dependence in the volatility of the returns. This implies it might be an (G)ARCH process, and therefore appropriate to model it as such.
+
+```{r e1c, include = TRUE}
+
+s <- min(10, length(r)/5)
+
+r_square <- r ^ 2
+
+acf(r, lag.max = s)
+
+acf(r_square, lag.max = s)
+
+
+```
+
+
+## d) Compute the daily standard deviation, variance, skewness, and kurtosis of r. Comment on the results. (3 marks)
+
+<br>
+
+These descriptive statistics tell us the following about the daily log returns of the Dow Jones Industrial Index:
+
+* The standard deviation is 1.17, which means daily log returns are less tightly clustered around the mean than a series that is normally distributed as Gaussian distributions have a standard deviation of 1.
+
+* The variance is 1.37, which tells us this series is more volatile than a Gaussian distributions, which have a variance of 1.
+
+* The skewness is -0.10, which implies the series is slightly negatively skewed, but overall reasonably close to what we'd expect for a Gaussian distribution (which have a skewness of 0).
+
+* The kurtosis is 10.0, which tells us that the thickness of the tails in the distribution is very high relative to the typical Gaussian score of 3.0.
+
+
+
+
+```{r e1d, include = TRUE}
+
+r_desc_stats <- bind_cols(sd(r), var(r), skewness(r),kurtosis(r)) %>% 
+  select( sd = 1, var = 2, skew = 3, kurt = 4)
+
+print(r_desc_stats)
+
+```
+
+## e) In general, the daily volatility of a stock is measured by the standard deviation of the daily stock price, and the annualized volatility is calculated by multiplying the daily volatility by the square root of 252. What is the annualized volatility of the Dow Jones Industrial Index? (2 marks)
+
+<br>
+
+The daily standard deviation of the Dow Jones Industrial Index is 1.17 according to this dataset. This implies an average annualised volatility of 18.56%.
+
+```{r e1e, include = TRUE}
+
+annualised_volatility <- r_desc_stats %>% 
+  select(sd) %>% 
+  mutate(ann_vol = sd * sqrt(252)) %>% 
+  select(ann_vol) %>% 
+  pull()
+
+print(annualised_volatility)
+
+
+
+```
+
+## f) Estimate the GARCH(1,1) model for the returns of the Dow Jones Industrial Index as specified in the assignment printout.
+
+## Consider your printout. Comment on the coefficients and on their significance based on robust standard errors. Briefly evaluate the weighted Ljung-Box tests, the weighted ARCH LM tests, the Nyblom stability tests, and the sign tests. For each group of these tests, state the null and alternative hypotheses, the statistical decision, and the conclusion. (8 marks)
+
+<br>
+
+The code below estimates a GARCH(1,1) model where the conditional mean equation is equal to a constant. We interpret the output as follows:
+
+* For the estimated model coefficients:
+
+  - This section assesses the significance of all the terms in the mean and variance equation using both regular standard errors based on the Maximum Likelihood (ML) and normal distribution, as well as robust standard errors based on the Quasi Maximum Likelihood.
+  
+  - The null hypothesis for these tests on the model coefficient is that their value is equal to zero, whereas the alternate hypothesis is that they are not equal to zero
+  
+  - Regardles of if we use normal or robust standard errors, all of the terms in this GARCH(1,1) model are significant as all their p-values are effectively zero, this applies for both the conditional mean and conditional variance equations. 
+  
+  - Therefore, there is no immediate reason to consider changing any of the terms in the mean or variance equation as they are all statistically different from zero. This support the specification of a GARCH(1,1) model for the daily log returns of the Dow Jones Industrial Index.
+
+* For the Weighted Ljung-Box tests:
+  
+  - The null hypothesis for these tests is that there is no autocorrelation of (i) order 1, (ii) orders 1-2 and (iii) orders 1-5 in the standardised residuals and the standardised squared residuals. The alternate hypothesis is that there is autocorrelation for any given order of the standardised residuals and standardised squared residuals.
+  
+  - For the standardised residuals, we are able to maintain the null hypothesis that there is no autocorrelation for (i) order 1, (ii) orders 1-2 and (iii) orders 1-5 as the p-values (0.25, 0.27 and 0.18) are sufficiently large, even at the 10% significance level.
+  
+  - The same conclusion applies to the standardised squared residuals, as all the p-values (0.41, 0.29 and 0.30) are sufficiently large that the null hypothesis is maintained, even at the 10% level.
+  
+  - This outcome supports the specification of the GARCH(1,1) model as there is no evidence of autocorrelation in the standardised residuals or squared standardised residuals.
+  
+* For the Weighted ARCH LM tests:
+
+  - The null hypothesis is that there are no ARCH effects left in the residuals. The alternate hypothesis is that there are ARCH effects left in the residuals.
+  
+  - All of the p-values (0.27, 0.26 and 0.38) are sufficiently large to maintain the null hypothesis that there are no ARCH effects remaining in the standardised residuals at lags 3, 5 and 7.
+  
+  - As these tests suggest there are no ARCH effects remaining in the standardised residuals, this outcome supports the GARCH(1,1) model specification.
+  
+* For the Nyblom stability test:
+
+  - The null hypothesis for the Nyblom stability test is that the parameters given for the chosen model are stable over time. The alternate hypothesis is that they are unstable. When evaluating the Nyblom stability test you need to consider the joint and individual statistics.
+  
+  - The joint test statistic is 2.49, which is above the joint statistic 1% critical value of 1.6. Therefore, there we reject then null hypothesis for the model as a whole at the 1% significance level that these parameters are jointly stable.
+  
+  - This is also the case for the individual tests, where all test statistics for each parameter are greater than the 1% critical value of 0.75. Therefore, we are also able to reject the null hypothesis for each parameter at the 1% significance level that they are stable individually.
+  
+  - Therefore, there is significant evidence of parameter instability both overall and at the individual parameter level because every Nyblom stability test rejects the null hypothesis that there is no instability in the parameters.This does not support the GARCH(1,1) model specification.
+
+  
+* For the sign tests:
+
+  - The null hypothesis is that negative and positive returns do not have different impact on future volatility. The alternate hypothesis is that negative and positive returns have different impact on future volatility. This test is conducted jointly, and separately to determine if the effect is negatively or positively biased.
+
+  - Jointly, the p-value is sufficiently close to zero to reject the null hypothesis that negative and positive returns have do not have different impacts on volatility. However, we maintain the null hypothesis for the negative and positive sign bias effects.
+  
+  - Therefore, there is evidence of leverage effects that positive and negative returns have different impact on volatility, but there's no evidence to show if positive or negative shocks are more impactful than the other. This does not support the GARCH(1,1) model specification.
+
+
+```{r e1f, include = TRUE}
+
+spec_v1 = ugarchspec(mean.model = list(armaOrder = c(0,0), include.mean = TRUE),
+                     variance.model = list(model = "sGARCH", garchOrder = c(1,1)),
+                     distribution.model = "norm")
+
+estimate_v1 <- ugarchfit(spec = spec_v1, data = r)
+
+print(estimate_v1)
+
+```
+
+
+
+
+## g) Estimate the TGARCH(1,1) model for the returns of the Dow Jones Industrial as specified in the assignment printout.
+
+## Do the results imply that negative innovations have greater impact on the conditional variance of the Dow Jones returns than positive innovations? Which model do you prefer, GARCH(1,1) or TGARCH(1,1)? Explain your answers. (4 marks)
+
+<br>
+
+Do the results imply the negative innovations have greater impact on the condition variance of the Dow Jones returns than positive innovations?
+
+* Yes, there is evidence that negative innovations have greater impact on the condition variance of the Dow Jones returns than positive innovations.
+
+* This is because the parameter eta11 is significantly positive, with a value of 0.73 and a p-value close to zero, regardless of if we use normal or robust standard errors. In TGARCH models, a significantly positive eta11-hat value implies that negative shocks have greater effect on expected volatility than positive shocks.
+
+Which model do you prefer, GARCH(1,1) or TGARCH(1,1)?
+
+* Overall, I prefer the GARCH(1,1) for several reasons:
+  
+  - All of the parameters in the GARCH(1,1) model are significant. In the TGARCH(1,1) model the mu parameter is insignificant regardless of if we using standard or robust standard errors. Although the standard errors are lower in the TGARCH(1,1) model than the GARCH(1,1), as it currently stands, the entire conditional mean equation is insignificant as its just defined as a constant mean.
+  
+  - There is no evidence of autocorrelation in the standardised residuals or standardised squared residuals in the GARCH(1,1) model, unlike the TGARCH(1,1) model. The p-values for the weighted Ljung-Box test on the standardised squared residuals in the TGARCH(1,1) model reject the null hypothesis that there is no autocorrelation of order 1-5 and order 1-9 (p-values: 0.03 and 0.03 respectively).
+  
+  - There is no evidence of any ARCH effects remaining in the standardised residuals of the GARCH(1,1) model, unlike the TGARCH(1,1 model). The p-values for the weighted ARCH LM tests in the GARCH(1,1) are all sufficiently large to maintain the null hypothesis that there are no ARCH effects remaining in the standardised residuals. However, None of the weighted ARCH LM test p-values are large than 0.05 in the TGARCH(1,1) model, which means there's evidence of ARCH effects remaining in the standardised residuals at lags 1, 2 and 5 at the 5% significance level (p-values are 0.005, 0.01 and 0.02 respectively). The p-values for lags 5 and 7 are sufficiently large to maintain the null hypothesis of no remaining ARCH effects in the standardised residuals at the 10% significance level, but this is still a worse outcome than the ARCH(1,1) model.
+  
+While the TGARCH(1,1) model performs better in terms of model selection criteria, an insignificant conditional mean equation, evidence of remaining ARCH effects in the standardised residuals and evidence of autocorrelation in the squared standardised residuals are disadvantages too critical to ignore when comparing the GARCH(1,1) which does not have these issues.
+
+```{r e1g, include = TRUE}
+spec_v2 = ugarchspec(mean.model = list(armaOrder = c(0,0), include.mean = TRUE),
+                     variance.model = list(model = "fGARCH", submodel = "TGARCH",
+                                           garchOrder = c(1,1)),
+                     distribution.model = "norm")
+
+estimate_v2 <- ugarchfit(spec = spec_v2, data = r)
+
+print(estimate_v2)
+
+
+```
+
+
+
+
+
+
+
