@@ -1,0 +1,212 @@
+---
+title: "ECON30024/ECON90024 - Assignment 1 - Q1 & Q2"
+author: "Shashwat Bharadwaj, Arjuna Bhattacharya, Josh Copeland, Olivier van Druten"
+date: "2025-03-31"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+library(quantmod)
+library(tidyverse)
+library(RColorBrewer)
+library(urca)
+
+
+```
+
+```{r setup_comment}
+
+# [INSERT ALL PACKAGES INCLUDED AS COMMENTS BEFORE SUBMISSION]
+
+
+```
+
+# Question 1 
+
+(30 marks) This question asks you to document some data facts on the growth of finance in Australia. For each of the following, present and describe its growth trend in past few decades.
+
+### Q1a - (10 marks) Ratio of total financial assets to GDP, where ‘total financial assets’refers to total financial assets owned by Australian households and private nonfinancial businesses or corporations.
+
+```{r q1a}
+
+print("hello world")
+
+```
+
+
+### Q1b - (10 marks) The financial sector’s contribution to GDP (i.e., its value added share of GDP), where the financial sector refers to the financial and insurance services industry in Australia.
+
+```{r q1b}
+
+print("hello world")
+
+```
+
+### Q1c - (10 marks) The financial sector’s average wage relative to the average wage in all
+industries, where ‘average wage’ is usually measured by a full time male adult’s
+average weekly earnings.
+
+```{r q1c}
+
+print("hello world")
+
+```
+
+
+# Question 2
+
+This question asks you to test the weak form efficiency of the Australian share market using share price data. Refer to Topic 2 lectures and Groenewold and Kang (1993) (available via Readings Online on LMS) for guidance on how to perform the tests and interpret the results.
+
+### Q2a -  (2 marks) Find monthly data series for All Ordinaries and S&P/ASX 200 indices. Clearly state your data source and sample period in your report, but please do not include the observations of the data series in your report.
+
+We have used the tidyquant package to directly retrieve timeseries for the All Ordinaries and ASX200 series from January 2000 to February 2025. By default, the function we have used to retrieve this data (getSymbols()) retrieves its data from Yahoo Finance, as noted on page 50 of the [quantmod documentation](/https://cran.r-project.org/web/packages/quantmod/quantmod.pdf).
+
+```{r q2a}
+
+# Retrieving data
+
+getSymbols(c("^AXJO", "^AORD"), from = "2000-01-01", to = Sys.Date())
+
+# Reformatting data into tidy format
+
+data <- tibble(
+  
+  date = as.Date(index(AXJO)),
+  ASX200_Close = as.numeric(AXJO$AXJO.Close),
+  AllOrds_Close = as.numeric(AORD$AORD.Close)
+  
+) %>% 
+  select(date, asx200 = ASX200_Close, allords = AllOrds_Close) %>% 
+  pivot_longer(-date)
+
+# Creating monthly observations from daily data
+
+data <- data %>% 
+  mutate(year_month = floor_date(date, "month")) %>%
+  group_by(name, year_month) %>%
+  summarise(value = mean(value, na.rm = TRUE)) %>% 
+  select(date = year_month, value) %>% 
+  ungroup() %>% 
+  filter(date < "2025-03-01")
+
+# Charting observations
+
+ggplot(data, aes(date, value, colour = name)) + 
+  geom_line() + 
+  labs(title = "Australian stock market indices",
+       y = "Value",
+       x = "Date") + 
+  theme_minimal() +
+  scale_color_brewer(palette = "Set1")
+
+```
+
+### Q2b -  (14 marks) For each price index, calculate the corresponding return series. Do this using the exact formula for calculating rates of return on a price index or use the log-difference approximation. Then use the Box-Ljung test (also called Ljung-Box test) to test the joint significance of the first 12 autocorrelations of each return series.
+
+We create returns using the exact formula on both price indices and conduct the Box-Ljung test on both of these returns separately. The null hypothesis of the Box-Ljung test is there there are no significant autocorrelations up to lag 12 (you can use any number of lags, but that's what we're using in this assignment).
+
+The p-values from the Box-Ljung tests are 0.10 and 0.18 for the allords and asx200 returns respectively. As both these p-values are greater than 0.05, we are unable to reject the null hypothesis of these tests. This means neither time series has no significant autocorrelation up to lag 12.
+
+This is consistent with the weak form of the Efficient Market Hypothesis (EMH): the past prices (and therefore returns) are assumed to contain no useful information on future prices. If there was, there would be significant autocorrelation in this return series.
+
+However, we need to consider these results in context of the joint hypothesis problem. Our failure to reject the null hypothesis, and therefore confirm the EMH, is actually conditional the assumption the data follows a random walk model. If our data does not follow a random walk (which we can't confirm using this test), then our results are invalidated. However, conditional on the series being a random walk, we confirm the weak form of the EMH.
+
+```{r q2b}
+
+# Calculating monthly returns
+
+data <- data %>% 
+  group_by(name) %>% 
+  mutate(returns = ((value - lag(value)) / value) * 100) %>% 
+  na.omit()
+
+ggplot(data, aes(date, returns, colour = name)) + 
+  geom_line() + 
+  labs(title = "Australian stock market indice returns",
+       y = "Returns",
+       x = "Date") + 
+  theme_minimal() +
+  scale_color_brewer(palette = "Set1")
+
+# Conducting Box-Ljung test on allords
+
+data %>% 
+  filter(name == "allords") %>% 
+  pull(returns) %>% 
+  Box.test(lag = 12, type = "Ljung-Box")
+
+# Conducting Box-Ljung test on asx200
+
+data %>% 
+  filter(name == "asx200") %>% 
+  pull(returns) %>% 
+  Box.test(lag = 12, type = "Ljung-Box")
+
+```
+
+### Q2c - (14 marks) Use a unit root test or a regression to test whether the logarithm of each price index follows a random walk. For the regression analysis, you can estimate a simple regression as discussed on slide 11 of Topic 2 (if you don’t have much experience in Econometrics), or try to estimate the regression of Groenewold and Kang (1993) as given in Eq. (3) of the paper, or estimate an alternative regression that you think suitable.
+
+Rather than using the regression of the form given in Groenewold and Kang (1993) we instead use the Augmented Dicky-Fuller (ADF) test to for the presence of a unit root in the logarithm of our stock market indices. We think this is reasonable for two reasons:
+
+* It is a very popular unit root test in empirical economic papers.
+
+* It allows us to test for the two different hypotheses tested by Groenewold and Kang (1993): the process is random walk with a trend and drift; the process is a random walk with a drift.
+
+In this test, as is the case of the Phillips-Perron (PP) test used by Groenewold and Kang (1993), the null hypothesis is the time series has a unit root - meaning it is non-stationary and therefore follows a random walk. The alternative hypothesis is the opposite: it does not have a unit root - meaning it is stationary and does not follow a random walk. This is a left-sided test, meaning we need the test statistics to be smaller than the relevant critical values to reject the null hypothesis at a given significance level.
+
+When we test the allords index for the presence of a unit root we retrieve test statistics of -0.66 and -2.73 for the drift and drift and trend options. Neither of these test statistics are less than the 10 per cent critical value  (-2.57 and -3.13 respectively), meaning we cannot reject the null hypothesis of allords following a random walk at any reasonable significance level.
+
+We do the same for the ASX200 series, producing test statistics of -0.72 and -2.71 for the drift and drift and trend options. Again, neither of these are less than the 10 per cent critical value  (-2.57 and -3.13 respectively), meaning we cannot reject the null hypothesis of asx200 following a random walk at any reasonable significance level.
+
+These results support the weak form of the EMH, which says share prices reflect all past information, meaning future price movements are unpredictable base on past price data. Our failure to reject the null hypothesis of a random walk confirms this weak form of the EMH.
+
+However, it's important to be aware of the fact the testing EMH wit ha unit root test is not independent of the underlying model of asset prices. Failing to reject the null hypothesis doesn't necessarily confirm EMH by itself as this test implicitly assumes it follows a random walk. If this is incorrect it could affect our conclusion. Therefore, our initial conclusion of confirming EMH is actually conditional on us assuming the data follows a random walk.
+
+```{r q2c}
+
+# Turning price indexes into logarithms
+
+data <- data %>% 
+  mutate(value_log = log(value))
+
+ggplot(data, aes(date, value_log, colour = name)) + 
+  geom_line() + 
+  labs(title = "Logarithms of Australian stock market indices",
+       y = "Value",
+       x = "Date") + 
+  theme_minimal() +
+  scale_color_brewer(palette = "Set1")
+
+
+# Producing ADF tests for the allords series
+
+data %>% 
+  filter(name == "allords") %>% 
+  pull(value) %>% 
+  ur.df(type = "drift", selectlags = "AIC") %>%  
+  summary()
+
+data %>% 
+  filter(name == "allords") %>% 
+  pull(value) %>% 
+  ur.df(type = "trend", selectlags = "AIC") %>%  
+  summary()
+
+
+# Producing ADF tests for the asx200 series
+
+data %>% 
+  filter(name == "asx200") %>% 
+  pull(value) %>% 
+  ur.df(type = "drift", selectlags = "AIC") %>%  
+  summary()
+
+data %>% 
+  filter(name == "asx200") %>% 
+  pull(value) %>% 
+  ur.df(type = "trend", selectlags = "AIC") %>%  
+  summary()
+
+
+```
