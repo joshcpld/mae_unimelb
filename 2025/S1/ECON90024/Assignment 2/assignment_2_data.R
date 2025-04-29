@@ -2,6 +2,15 @@ library(tidyverse)
 library(tidyquant)
 library(stringr)
 library(readrba)
+library(janitor)
+library(broom)
+
+
+################################################################################
+############################### QUESTION 3A ####################################
+################################################################################
+
+# ASX Data #####################################################################
 
 asx_tickers <- c(
   "BHP.AX",  # BHP Group
@@ -40,10 +49,14 @@ data <- raw_data %>%
   group_by(name) %>% 
   mutate(return = (price / lag(price)* 100 - 100)) %>% 
   ungroup() %>%  
-  select(name, date = month, price, return) %>% 
-  na.omit() 
+  select(name, date = month, value = return) %>% 
+  na.omit() %>%
+  pivot_wider(names_from = name,
+              values_from = value) %>% 
+  clean_names()
+  
 
-# RBA Data
+# RBA Data #####################################################################
 
 rba_data <- read_rba_seriesid("FIRMMBAB90") %>% 
   select(date,value) %>% 
@@ -52,9 +65,138 @@ rba_data <- read_rba_seriesid("FIRMMBAB90") %>%
   select(date = month, rf_rate = monthly_rate)
 
 
-# Connecting data sources
+# Connecting data sources ######################################################
 
 data <- data %>% 
   inner_join(rba_data, by = "date")
 
 
+
+################################################################################
+############################# QUESTION 3B  #####################################
+################################################################################
+
+
+
+# Computing excess returns #####################################################
+
+capm_data <- data %>% 
+  mutate(market_excess = axjo - rf_rate) %>% 
+  mutate(
+    
+    across(
+      .cols = -c(date, axjo, rf_rate, market_excess),
+      .fn = ~.x - rf_rate,
+      .names = "{.col}_excess"
+    )
+  ) %>% 
+  select(date, matches("_excess$"))
+
+
+# Producing CAPM regression results ############################################
+
+# Extracting column names
+
+excess_columns <- colnames(capm_data)[grepl("_excess$", colnames(capm_data))]
+
+# Fit CAPM models and extract the beta coefficients
+
+betas <- map(excess_columns, function(col) {
+  model <- lm(as.formula(paste(col, "~ market_excess")), data = capm_data)
+  coef(model)["market_excess"]
+})
+
+# Convert the list of betas to a dataframe
+
+betas_df <- data.frame(name = excess_columns, beta = unlist(betas)) %>% 
+  mutate(beta = round(beta,3)) %>% 
+  mutate(name = str_remove(name, "_excess"))
+print(betas_df)
+
+# Write to csv for inclusion in report
+
+write_csv(betas_df, "capm_betas_df.csv")
+
+
+  
+
+
+
+################################################################################
+############################# QUESTION 3C ######################################
+################################################################################
+
+
+##################################### i ########################################
+
+# Need to first calculate excess returns
+
+avg_returns <- data %>% 
+  pivot_longer(cols = -date,
+               names_to = "name",
+               values_to = "value") %>% 
+  group_by(name) %>% 
+  summarise(avg_returns = mean(value, na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  filter(name != "axjo")
+
+print(avg_returns)
+
+
+# Match with earlier returns
+
+avg_regression_data <- avg_returns %>% 
+  inner_join(betas_df, by = "name") %>% 
+  select(name, avg_returns, beta)
+
+
+# Produce regression
+
+avg_returns_regression <- lm(avg_returns ~ beta, data = avg_regression_data)
+
+summary(avg_returns_regression)
+
+avg_returns_regression_tidy <- lm(avg_returns ~ beta, data = avg_regression_data) %>% 
+  tidy()
+
+write_csv(avg_returns_regression_tidy, "avg_returns_regression.csv")
+
+
+
+
+
+##################################### ii #######################################
+
+
+ggplot(avg_regression_data, aes(avg_returns, beta)) + 
+  geom_point() +
+  geom_abline(intercept = 0.7686, slope = -0.0562, color = "red", linetype = "dashed", size = 1) +
+  annotate(
+    "text",
+    x = 0,  # adjust position as needed
+    y = 0.85,
+    label = "y = 0.7686 - 0.0562x",
+    hjust = 0,
+    vjust = 1,
+    color = "red",
+    size = 4
+  )
+
+
+
+##################################### iii ######################################
+
+
+
+coefficients <- coef(avg_returns_regression)
+
+beta <- as.numeric(coef(avg_returns_regression)["beta"])
+se <- summary(avg_returns_regression)$coefficients["beta", "Std. Error"]
+
+t_stat <- beta / se
+
+df <- df.residual(avg_returns_regression)
+
+p_value <- pt(t_stat, df = df, lower.tail = TRUE)
+
+print(p_value)
