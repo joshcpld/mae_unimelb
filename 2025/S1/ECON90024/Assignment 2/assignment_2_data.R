@@ -129,7 +129,9 @@ write_csv(betas_df, "capm_betas_df.csv")
 
 ##################################### i ########################################
 
-# Need to first calculate excess returns
+# Need to first calculate average returns
+
+
 
 avg_returns <- data %>% 
   pivot_longer(cols = -date,
@@ -142,47 +144,71 @@ avg_returns <- data %>%
 
 print(avg_returns)
 
+# Average rf return
+
+avg_rf_return <- avg_returns %>% 
+  filter(name == "rf_rate") %>% 
+  pull(avg_returns)
+
+
+# Now excess returns
+
+excess_returns <- avg_returns %>% 
+  filter(name != "rf_rate") %>% 
+  mutate(rf_rate = avg_rf_return) %>% 
+  mutate(excess_returns = avg_returns - rf_rate) %>% 
+  select(name, excess_returns)
+
+
 
 # Match with earlier returns
 
-avg_regression_data <- avg_returns %>% 
-  inner_join(betas_df, by = "name") %>% 
-  select(name, avg_returns, beta)
+excess_regression_data <- excess_returns %>% 
+  inner_join(betas_df, by = "name") 
 
 
 # Produce regression
 
-avg_returns_regression <- lm(avg_returns ~ beta, data = avg_regression_data)
+excess_returns_cross_section_regression <- lm(excess_returns ~ beta, data = excess_regression_data)
 
-summary(avg_returns_regression)
+summary(excess_returns_cross_section_regression)
 
-avg_returns_regression_tidy <- lm(avg_returns ~ beta, data = avg_regression_data) %>% 
+excess_returns_cross_section_regression_tidy <- excess_returns_cross_section_regression %>% 
   tidy()
 
 write_csv(avg_returns_regression_tidy, "avg_returns_regression.csv")
 
 
+# Producing average excess returns
 
+overall_avg_returns <- excess_returns %>% 
+  summarise(average_excess_returns = mean(excess_returns))
+  
 
 
 ##################################### ii #######################################
 
 
-ggplot(avg_regression_data, aes(avg_returns, beta)) + 
+p <- ggplot(excess_regression_data, aes(beta,excess_returns)) + 
   geom_point() +
   geom_abline(intercept = 0.7686, slope = -0.0562, color = "red", linetype = "dashed", size = 1) +
   annotate(
     "text",
     x = 0,  # adjust position as needed
-    y = 0.85,
-    label = "y = 0.7686 - 0.0562x",
+    y = 1,
+    label = "Excess returns = 0.77 - 0.06*Beta",
     hjust = 0,
     vjust = 1,
     color = "red",
     size = 4
-  )
+  ) +
+  labs(
+        title = "Relationship between excess-returns and CAPM beta",
+        caption = "Note: The red dotted line reflect the estimated regression line from Q3Cii."
+        ) +
+  theme(plot.caption = element_text(hjust = 0))
 
-
+ggsave("q3cii.jpg", plot = p)
 
 ##################################### iii ######################################
 
