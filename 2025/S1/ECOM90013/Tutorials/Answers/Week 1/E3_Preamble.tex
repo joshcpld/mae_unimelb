@@ -1,0 +1,188 @@
+%\DocumentMetadata{testphase=phase-III}
+\documentclass[12pt,a4paper]{article}
+\usepackage{amsmath,amssymb,amsthm,booktabs,cancel,color,enumitem,graphicx,listings,mathtools,metalogo,%tikz,mathrsfs,
+multicol,pdfpages,pgfplots,rotating,subfig,widebar,xparse,xspace}
+
+\pgfplotsset{compat=1.15}
+\usetikzlibrary{intersections}
+
+%\usepackage{eucal}
+\usepackage[scr]{rsfso}
+\usepackage[margin=1in]{geometry}
+\usepackage[comma,longnamesfirst,round]{natbib}
+%
+\usepackage[colorlinks=true,% If false then links black, but set in ugly red boxes
+                            % If true then the following colour scheme is used.
+            citecolor=blue,% The named colours include: black, white, red, yellow
+            linkcolor=red,%                             blue, green, cyan, magenta
+            anchorcolor=yellow,%
+            filecolor=cyan,% Can set all all colors to a single color using the following command
+            menucolor=red,% allcolors=<colour>.  For example, allcolors=black would be idea for
+            runcolor=filecolor,% printing hard copies.  Simply uncomment the command on the following
+            urlcolor=magenta,% line if you want this.
+            %allcolors=black,
+            pagebackref=true% In the bibliography gives citation page references. To turn on set
+                            % to true
+            ]{hyperref}
+
+%% 
+ % \usepackage[tagged, highstructure]{accessibility}
+ % \usepackage{axessibility}
+ %%
+            
+%
+% Theorems and Remarks
+%
+\theoremstyle{definition}
+\newtheorem{ass}{Assumption}
+
+\theoremstyle{plain}
+\newtheorem*{Thm}{Theorem}
+\newtheorem{thm}{Theorem}
+\theoremstyle{remark}
+\newtheorem*{remark}{Remark}
+\newtheorem{rem}{Remark}
+\newtheorem{corr}{Corollary}
+\theoremstyle{definition}
+%\newtheorem{Def}{Definition}
+\newtheorem*{deff}{Definition}
+
+\newtheoremstyle{example}% name
+  {9pt}%      Space above, empty = `usual value'
+  {9pt}%      Space below
+  {\normalfont} %\renewcommand{\myfiletype}{loe}}% Body font
+  {}%         Indent amount (empty = no indent, \parindent = para indent)
+  {\bfseries}% Thm head font
+  {.}%        Punctuation after thm head
+  {\newline}% Space after thm head: \newline = linebreak
+  {\thmname{#1}\thmnumber{ #2.}\thmnote{ #3}}%Thm head spec
+  
+\theoremstyle{example}
+\newtheorem{example}{Example}
+
+\newtheoremstyle{Def}% name
+  {9pt}%      Space above, empty = `usual value'
+  {9pt}%      Space below
+  {\normalfont}%\addcontentsline{lod}{Def}{\protect\numberline{\theDef}y}} %\renewcommand{\myfiletype}{lod}}% Body font
+  {}%         Indent amount (empty = no indent, \parindent = para indent)
+  {\bfseries}% Thm head font
+  {.}%        Punctuation after thm head
+  {\newline}% Space after thm head: \newline = linebreak
+  {\thmname{#1}\thmnumber{ #2.}\thmnote{ #3}}%         Thm head spec
+  
+\theoremstyle{Def}
+\newtheorem{Def}{Definition}
+
+\newcommand{\abs}[1]{\ensuremath{\operatorname{abs}\left(#1\right)}}
+\newcommand{\ans}{\newline\textit{\textcolor{red}{Answer:}}\newline}
+\newcommand{\ant}{\textit{\textcolor{red}{Answer:}}\newline}
+\makeatletter
+   \def\argmax{\mathop{\operator@font argmax}}
+   \def\argmin{\mathop{\operator@font argmin}}
+\makeatother
+%\newcommand{\argmax}{\arg\max}
+%\newcommand{\argmin}{\arg\min}
+\newcommand{\Beta}[2]{\ensuremath{\operatorname{B}\left(#1,#2\right)}}
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+\newcommand{\cmd}[1]{\mbox{\texttt{\symbol{'134}#1}}}
+\newcommand{\Co}[1]{\ensuremath \mathrm{Cov}_{0}\left[#1\right]}
+\newcommand{\cor}[2]{\ensuremath{\operatorname{cor}\left(#1,#2\right)}}
+\newcommand{\cov}[2]{\ensuremath{\operatorname{Cov}\left[#1,#2\right]}}
+\DeclareMathOperator{\diag}{diag}
+\newcommand{\dr}{\ensuremath{\mrmd r}}
+\newcommand{\ds}{\ensuremath{\mrmd s}}
+\newcommand{\dt}{\ensuremath{\mrmd t}}
+\newcommand{\dw}{\ensuremath{\mrmd w}}
+\newcommand{\dx}{\ensuremath{\mrmd x}}
+\newcommand{\dy}{\ensuremath{\mrmd y}}
+\newcommand{\dz}{\ensuremath{\mrmd z}}
+\DeclareMathOperator{\etr}{etr}
+\newcommand{\E}[1]{\ensuremath{\operatorname{E}\left[#1\right]}}
+\newcommand{\Eo}[1]{\ensuremath \mathrm{E}_{0}\left[#1\right]}
+\newcommand{\Eq}[1]{\begin{align*}#1\end{align*}}
+\newcommand{\Ex}[2]{\ensuremath{\operatorname{E}_{#1}\left[#2\right]}}
+\newcommand{\Gammafrac}[2][2]{\ensuremath{\Gamma\left(\tfrac{#2}{#1}\right)}}%\Gamma[x]{y} yields Gamma(y/x)
+\newcommand{\gfn}[1]{\ensuremath{\Gamma\left(#1\right)}}
+\newcommand{\half}[1]{\ensuremath{\frac{#1}{2}}}
+\newcommand{\hyperg}[2]{\ensuremath{\prescript{}{#1}{F}^{}_{#2}}}
+\newcommand{\im}[1]{\ensuremath{\operatorname{Im}\left(#1\right)}}
+\newcommand{\intinfty}{\int^{\infty}_{0}}
+\newcommand{\matlab}{\textsc{Matlab}\xspace}
+\newcommand{\mg}{\textit{\textcolor{red}{Marking Guide}}:\xspace\newline}
+\newcommand{\mgt}{\newline\textit{\textcolor{blue}{Marking Guide:}}\newline}
+\newcommand{\Mo}[1]{\ensuremath \mathrm{MSE}_{0}\left[#1\right]}
+\newcommand{\mrmd}{\ensuremath{\,\mathrm{d}}}
+\newcommand{\myrego}{\,\raisebox{1.5pt}{\scalebox{0.81}{\textregistered}}\xspace}
+\DeclareMathOperator{\N}{N}
+\newcommand{\ninf}[1][n]{#1\to\infty}
+\newcommand{\param}[2][n]{\ensuremath{#2_{1} #2_{2}\ldots #2_{#1}}}
+\newcommand{\params}[2][n]{\ensuremath{#2_{1},#2_{2},\ldots,#2_{#1}}}
+\newcommand{\paramsj}[3][j]{\ensuremath{\left(#2_{1}\right)_{#1}\left(#2_{2}\right)_{#1}\ldots\left(#2_{#3}\right)_{#1}}}
+\newcommand{\pdflatex}{pdf\LaTeX\xspace}
+\makeatletter
+   \def\plim{\mathop{\operator@font plim}}
+\makeatother
+\newcommand{\Poch}[2]{\ensuremath{\left(#1\right)_{#2}}}
+\newcommand{\Prob}[1]{\ensuremath{\operatorname{Pr}\left(#1\right)}}
+\newcommand{\re}[1]{\ensuremath{\operatorname{Re}\left(#1\right)}}
+\newcommand{\sgn}[1]{\ensuremath{\operatorname{sgn}\left(#1\right)}}
+%Duplicated commands:  Settle on a choice.  No. They do different things!
+\newcommand{\solution}{\textit{\textcolor{red}{Solution}}:\xspace\newline}
+\newcommand{\sol}{\textcolor{red}{Solution:}\xspace}
+%
+\DeclareDocumentCommand{\sumj}{ O{j} O{0} }{\ensuremath{\sum_{#1=#2}^{\infty}\,}}
+\newcommand{\tod}{\ensuremath{\overset{d}{\to}}}
+\DeclareMathOperator{\tr}{tr}
+\DeclareMathOperator{\myvec}{vec}
+\DeclareMathOperator{\vech}{vech}
+% More duplicates: Choice as been made?
+\newcommand{\V}[1]{\ensuremath{\operatorname{Var}\left[#1\right]}}
+\newcommand{\Vhat}[1]{\ensuremath{\operatorname{\protect\widehat{V}}\left[#1\right]}}
+\newcommand{\Vo}[1]{\ensuremath \mathrm{V}_{0}\left[#1\right]}
+%\newcommand{\var}[1]{\ensuremath{\operatorname{Var}\left(#1\right)}}
+\newcommand{\Vx}[2]{\ensuremath{\operatorname{Var}_{#1}\left[#2\right]}}
+
+%Boxes
+\newsavebox{\mystrutbox}
+\savebox{\mystrutbox}{\rule{0mm}{0.6cm}}
+\newcommand{\mystrut}{\usebox{\mystrutbox}}
+
+\newlength{\twosuper}
+\settowidth{\twosuper}{\textsuperscript{2}}
+
+%
+% List Management
+%
+\makeatletter
+   \renewcommand{\p@enumii}{\relax}
+   \def\plim{\mathop{\operator@font plim}}
+\makeatother
+\renewcommand{\theenumii}{(\alph{enumii})}
+\renewcommand{\labelenumii}{\theenumii}
+\makeatletter
+   \renewcommand{\p@enumii}{\theenumi}
+   \renewcommand{\p@enumiii}{\theenumi\theenumii}
+\makeatother
+
+% 
+% An extensions to amsmath matrix environments
+% (adds the same column specification options that array has)
+% originally from http://texblog.net/latex-archive/maths/amsmath-matrix/
+% 
+\makeatletter
+\renewcommand*\env@matrix[1][*\c@MaxMatrixCols c]{%
+  \hskip -\arraycolsep
+  \let\@ifnextchar\new@ifnextchar
+  \array{#1}}
+\makeatother
+
+
+\thispagestyle{empty}
+\bibliographystyle{Skeels}
+
+\title{ECOM40006/ECOM90013 Econometrics 3 \\
+        Department of Economics \\
+        University of Melbourne}
+\date{Semester 1, \the\year}
+

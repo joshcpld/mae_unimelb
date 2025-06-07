@@ -1,0 +1,191 @@
+%% 
+ % Assigment Template
+ % 
+ % Usage: You need to supply some details about the document in the
+ % preamble (before the \begin{document} command) and then the
+ % assignment content in the body of the document (before the
+ % \begin{document} command).
+ % 
+ %%
+\documentclass[12pt,a4paper]{article}
+\usepackage{amsmath,amssymb,amsthm} \allowdisplaybreaks
+\usepackage{fancyvrb,graphicx,listings,url} \VerbatimFootnotes
+\usepackage[hmargin=1.2in,vmargin=1in]{geometry}
+\usepackage[comma,longnamesfirst]{natbib} \bibliographystyle{plainnat}
+%
+% Add requested information between the parentheses { } below
+\newcommand\yourName{Chris Skeels} % If nothing else you know your own name.
+\newcommand\studentID{You know who I am} 
+% If all else fails look at your student ID card. 
+\newcommand\assignmentName{Week 1 Exercise} 
+% Name of assignment, e.g. Assignment 1, or essay title.
+\newcommand\submissionDate{\today} 
+% The default date is the one on which the file is last compiled.  You
+% can change this to, say, the date the file was last modified if
+% desired.
+\newcommand\subjectCode{ECOM40006/ECOM90013} 
+% This will be something along the lines of ECOMxxxxx or ECONxxxxx.
+\newcommand\subjectName{Econometrics 3} 
+% The subject name without the subject code, e.g. Econometric Techniques.
+\newcommand\yourBibliography{CHRIS} 
+% Supply name of .bib file, but without the .bib extension
+\newcommand{\tl}[1]{\Large\textbf{#1}}
+%
+% End of Preamble
+% 
+\begin{document} 
+%
+% Create Coversheet
+% 
+\thispagestyle{empty} \null \vskip 2em \begin{tabbing}
+\null\hspace*{3.6in}\=\kill \tl{\subjectCode} \> \tl{\subjectName}
+\\[\baselineskip] \tl{\studentID} \> \tl{\yourName} \\[\baselineskip]
+\tl{\assignmentName} \end{tabbing}
+\vspace{1cm} \noindent\textbf{PLAGIARISM}\\[\baselineskip] Plagiarism
+is the presentation by a student of an assignment which has in fact
+been copied in whole or in part from another student's work, or from
+any other source (E.g. published books or periodicals), without due
+acknowledgement in the text.\bigskip
+
+\noindent\textbf{COLLUSION}\\[\baselineskip] Collusion is the
+presentation by a student of an assignment as his or her own which is
+in fact the result in whole or part of unauthorised collaboration with
+another person or persons.\bigskip
+
+\noindent\textbf{DECLARATION}\\[\baselineskip] This assignment/essay
+is the sole work of the author whose name appears on the Title Page
+and contains no material which the author has previously submitted for
+assessment at The University of Melbourne or elsewhere.  Also, to the
+best of the author's knowledge and belief, the assignment/essay
+contains no material previously published or written by another person
+except where due reference is made in the text of the
+assignment/essay.  I declare that I have read, and in undertaking this
+research, have complied with the University's Code of Conduct for
+Research.  I also declare that I understand what is meant by
+plagiarism and that this is unacceptable; except where I have
+expressly indicated otherwise.  This assignment/essay is my own work
+and does not contain any plagiarised material in the form of
+unacknowledged quotations or mathematical workings or in any other
+form.  \vspace{0.5in}
+
+\noindent I declare that this assignment/essay is my own work and does
+not involve plagiarism or collusion.  \vspace{0.5in}
+
+\noindent Signed:\hspace{1cm} \begin{minipage}[t]{0.2\textwidth}
+	\begin{center}
+		\mbox{X} \\
+		\yourName \end{center}
+\end{minipage}
+\hfill Date: \submissionDate
+%
+% End Coversheet
+\newpage
+%
+% Enter your text here
+% 
+The \LaTeX\ that I used to generate the Tutorial Exercise appears on
+the next couple of pages.  My Bib\TeX\ entries appear immediately
+below.\footnote{Note the use of a double hyphen to specify a page
+range.  Strictly \verb+--+ prduces what is called an En-dash, which is
+used for number ranges.  You use a single hyphen for a hyphenated
+word, like non-singular, and a triple hyphen \verb+---+ to get an
+Em-dash ---.  See
+\url{https://www.thepunctuationguide.com/en-dash.html} for more on
+these versatile creatures.  In \LaTeX\ there is also the minus sign,
+which is what you get when you use a hyphen in math mode, e.g.,\ \(
+x-y \).  These symbols are all different and they all have different
+applications.}
+
+\begin{lstlisting}
+   @article{abadir99, 
+      author = {Karim M. Abadir}, 
+      title = {An Introduction to Hypergeometric Functions 
+               For Economists}, 
+      journal = {Econometric Reviews}, 
+      year = 1999, 
+      volume = 18, 
+      number = 3, 
+      pages = {287--330} 
+   }
+
+   @book{rao, author = {Calyampudi Radhakrishna Rao}, 
+      title = {Linear Statistical Inference and Its Applications}, 
+      edition = {Second},
+      publisher = {John Wiley \& Sons, Inc.}, 
+      year = 1973, 
+      address = {New York} 
+   } 
+\end{lstlisting}
+
+Finally, in order to do it all you need the file
+\texttt{E3\_Preamble.tex} in which I store all sorts of information
+that gets used in almost everything I produce for you.  I attach that
+file along with this one in the solutions.  The end result is what
+started all this.
+
+\newpage
+
+\begin{lstlisting}
+\input{E3_Preamble.tex}
+
+\title{Week 1  Tutorial Exercise Solutions}
+
+\begin{document}
+
+\maketitle
+\enlargethispage{\baselineskip}
+\thispagestyle{empty}
+\begin{enumerate}
+\item 
+\begin{enumerate}
+\item Download LaTeX.zip from the LMS and expand the archive (if
+that doesn't happen automatically).  Inside the folder that is
+created is another folder called `Assignment Template', which
+contains a file called assignment.tex.  Open this file in a text
+editor.  (Specifically, do not use Word or any other editor that
+will insert hidden material in the file.  A plain text editor
+like Notebook (on Windows) or TextEdit (on a Mac), or better
+still a LaTeX-aware editor of some description.)
+      
+\item Having opened assignment.tex you will see that there is a set of
+places where you need to insert indformation about yourself, your
+subject, and the task at hand, e.g.\ Exercise 1.  Enter these details
+into your file and then save it with a name other than assignment.tex.
+It is helpful to use names that allow you to discern what is inside
+the file without opening it.  For example, ECOM3-Ex1.tex might work
+for me.  You use whatever name you wish.
+      
+\item From the Library catalogue, obtain the Bib\TeX\ entry
+corresponding to \citet{abadir99}.  Also, manually create the Bib\TeX\
+entry for \citet{rao}.  Add both entries to a .bib file and include
+the contents of the .bib file in your report.  (You may want to
+explore the use of the \texttt{listings} package to do this.)
+      
+\item Do a web search for knitr.  (Yes, that is how it is
+spelt.)  If you end up at the Wikipedia page then follow the
+link to
+\url{https://github.com/yihui/knitr-examples/blob/master/002-minimal.Rnw}
+to see a very basic example of it's use.  Convince yourself that
+you can run your favourite regression in R and incorporate the
+results using knitr.
+\end{enumerate}
+
+\item Use \LaTeX, strictly pdf\LaTeX, to re-create the pdf document
+containing this Tutorial Exercise.  You must create a .bib file for
+the references and include the text of that file in your report.  (You
+may want to explore the use of the \texttt{listings} package to do
+this.).  If using Bib\TeX\ then you probably need to read the
+documentation for the \texttt{natbib} package to see how to cite
+material.  You may also need to use the \texttt{url} package to add
+the URL or the \texttt{hyperref} package.
+
+\end{enumerate}
+
+\bibliography{theNameOfYourBibFile} 
+% My Bib file is called CHRIS.bib, so I would just put CHRIS here. 
+
+\end{document}
+
+\end{lstlisting}
+
+\end{document}
