@@ -1,0 +1,55 @@
+---
+title: 'Week 4 Lab MAST90125: Bayesian Statistical learning'
+header-includes:
+- \usepackage{bm}
+- \usepackage{amsmath}
+output:
+  pdf_document:
+    number_sections: no
+  html_document:
+    df_print: paged
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+\vspace{1mm}
+
+## Question One
+
+We have seen residual plots in lecture. One example is a case where observations $y_i$ are simulated using \begin{equation}
+y_i=\beta_0+\beta_1x_i+\beta_2x_i^2+\varepsilon_i, \quad \varepsilon_i \sim \mathcal{N}(0,\sigma^2)\quad i=1,\cdots, n, 
+\label{eq1}
+\end{equation} but the model fitted was \begin{equation}
+y_i=\beta_0+\beta_1x_i+\varepsilon_i, \quad i=1,\cdots, n.
+\label{eq2}
+\end{equation} Simulate 2000 datapoints according to (\ref{eq1}) and fit the model (\ref{eq2}) to this data and answer the following.
+
+```{=tex}
+\renewcommand\labelenumi{\alph{enumi})}
+\begin{enumerate}
+\item
+For your simulated data, generate replicate data from the posterior predictive distribution, and construct
+two test statistics such that one will suggest poor model fit and the other will suggest good model fit.
+
+\textsf{Hint}: In week 2 lab, we found a Bayesian interpretation of a $t$-test in the context of estimating a mean. Generalise
+this to the regression case. %Note, it will be easier to simulate $\bm{\beta}$ conditional on $\sigma^2, y$ rather than just $y$ alone.
+\item
+Perform a marginal check, that is calculate
+$$p_i=\mbox{Pr}(y_i^{\mbox{\scriptsize rep}}\leq y_i|y_1,\cdots, y_n)$$
+Comment on the distribution of $p_i$, including a discussion of whether this marginal check was appropriate for
+checking model plausibility in this example. Graphical summaries may prove useful.
+\end{enumerate}
+```
+## Question Two
+
+In week 2 lab, we looked at the posterior distribution for the parameters of a normal distribution assuming Jeffreys' priors. For this example, determine
+
+```{=tex}
+$$\mbox{i)}\; \mbox{Var}(\mu|\mathbf{y}),\quad \mbox{ii)}\; E(\mbox{Var}(\mu|\mathbf{y})), \quad \mbox{iii)}\; \mbox{Var}(E(\mu|\mathbf{y})),\quad \mbox{with}\; \mathbf{y}=(y_1,\cdots, y_n)^{\scriptscriptstyle \top}$$
+and using the law of total variance, deduce what this implies about $\mbox{Var}(\mu)$.
+```
+\textsf{Hint}: If $z$ is drawn from a student-$t$ distribution with $\nu$ degrees of freedom, then $E(z) = 0$ and $\mbox{Var}(z) = \frac{\nu}{\nu-2}$.
+

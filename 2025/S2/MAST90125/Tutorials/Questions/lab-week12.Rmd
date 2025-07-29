@@ -1,0 +1,137 @@
+---
+title: 'Lab week 12 MAST90125: Bayesian Statistical learning'
+header-includes:
+   - \usepackage{bm}
+   - \usepackage{amsmath}
+output: 
+  pdf_document:
+    number_sections: no
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+set.seed(3478575)
+```
+
+
+# Making inference in noisy case.
+
+Management at a 24 hour healthline are interested in phone call duration. The available data was the standardised length of phone calls, and which hour ($t = 4, \ldots, 22$) the phone call was initiated. The following model was assumed,
+\begin{eqnarray}
+p(y_i | \mu(t)) &=& \mathcal{N}(\mu(t),\sigma^2) \nonumber \\
+p(\mu(t))   &=& \mathcal{N}(0,k(t,t))        \nonumber 
+\end{eqnarray}
+
+such that the covariance function $k(x,x')$ is periodic,
+\[ k(x,x') = \sigma^2_Ke^{-l\times \sin[(x-x')\pi/24]^2},   \]
+
+with $\sigma^2_K$ fixed to 1.21, and $l$ fixed to $0.5$.
+
+The researchers are interested in making predictions of phone call duration, $\tilde{\bm \mu}(t)$ for hours $t = 0, \ldots, 23$. As an initial step, they assumed $\sigma^2$ was 0.49. 
+
+## Instructions for lab
+
+Download \texttt{call.csv} from LMS.
+```{r}
+call<-read.csv('./calldata.csv',header=TRUE)
+y<-call$length
+t<-call$hour
+n<-length(y)
+```
+
+\begin{itemize}
+\item Based on the information provided, determine the joint distribution of data $\bf y$ and predictions $\tilde{\bm \mu}(t)$.
+\item Determine the distribution of $\tilde{\bm \mu}(t)$ conditional on $\bf y$, $\sigma^2$, $\sigma^2_K$ and $l$.
+\item Plot the predictions with 90 \% and 95 \% credible intervals along with the observed data. For this problem, would the Highest posterior density (HPD) and central credible intervals be different? Comment, in a Bayesian language, on the behaviour of predictions where no data was observed.
+\end{itemize}
+
+*Solution:*
+
+If $y_i|\mu(t) \sim \mathcal{N}(\mu(t),\sigma^2)$ and $p( \mu(t)) = \mathcal{N}(0,k(t,t))$, then the joint distribution is 
+
+\[ \begin{pmatrix} {\bf y} \\ \tilde{\bm \mu}({\bf t}) \end{pmatrix} = \mathcal{N} \bigg( \begin{pmatrix} {\bf 0} \\ {\bf 0} \end{pmatrix},\begin{pmatrix} {\bf k}({\bf t},{\bf t}) + \sigma^2{\bf I}_n & {\bf k}({\bf t},\tilde{\bf t}) \\ {\bf k}(\tilde{\bf t},{\bf t}) & {\bf k}(\tilde{{\bf t}},\tilde{{\bf t}}) \end{pmatrix}  \bigg)   \]
+
+The conditional distribution can be determined by arranging the kernel:
+\begin{eqnarray} e^{ - 0.5 \begin{pmatrix} {\bf y}' & \tilde{\bm \mu}({\bf t})' \end{pmatrix}\begin{pmatrix} {\bf k}({\bf t},{\bf t}) + \sigma^2{\bf I}_n & {\bf k}({\bf t},\tilde{\bf t}) \\ {\bf k}(\tilde{\bf t},{\bf t}) & {\bf k}(\tilde{{\bf t}},\tilde{{\bf t}})\end{pmatrix}^{-1}\begin{pmatrix} {\bf y} \\ \tilde{\bm \mu}({\bf t}) \end{pmatrix}} \nonumber   \end{eqnarray}
+
+To do this, the block matrix inversion formula will be useful.
+
+\[ \begin{pmatrix} {\bf A} & {\bf B} \\ {\bf C} & {\bf D} \end{pmatrix}^{-1} = \begin{pmatrix} {\bf A}^{-1} +{\bf A}^{-1}{\bf B}({\bf D} - {\bf C}{\bf A}^{-1}{\bf B})^{-1}{\bf C}{\bf A}^{-1}  &-{\bf A}^{-1}{\bf B}({\bf D} - {\bf C}{\bf A}^{-1}{\bf B})^{-1}   \\-({\bf D} - {\bf C}{\bf A}^{-1}{\bf B})^{-1}{\bf C}{\bf A}^{-1}  & ({\bf D} - {\bf C}{\bf A}^{-1}{\bf B})^{-1} \end{pmatrix}   \]
+
+Applying the block matrix inverse result, we get
+\begin{eqnarray} e^{ - 0.5 \begin{pmatrix} {\bf y}' & \tilde{\bm \mu}(\tilde{\bf t})' \end{pmatrix}\begin{pmatrix} {\bf k}({\bf t},{\bf t}) + \sigma^2{\bf I}_n & {\bf k}({\bf t},\tilde{\bf t}) \\ {\bf k}(\tilde{\bf t},{\bf t}) & {\bf k}(\tilde{{\bf t}},\tilde{{\bf t}})\end{pmatrix}^{-1}\begin{pmatrix} {\bf y} \\ \tilde{\bm \mu}({\bf t}) \end{pmatrix}} &=& 
+e^{ - 0.5 \begin{pmatrix} {\bf y}' & \tilde{\bm \mu}({\bf t})' \end{pmatrix}\begin{pmatrix} {\bf A} & {\bf B} \\ {\bf B}' & {\bf D} \end{pmatrix} \begin{pmatrix} {\bf y} \\ \tilde{\bm \mu}(\tilde{\bf t}) \end{pmatrix}} \nonumber \\
+&=& e^{ - 0.5({\bf y}'{\bf A}{\bf y} + {\bf y}'{\bf B}\tilde{\bm \mu}(\tilde{\bf t}) + \tilde{\bm \mu}(\tilde{\bf t})'{\bf B}'{\bf y} + \tilde{\bm \mu}(\tilde{\bf t})'{\bf D}\tilde{\bm \mu}(\tilde{\bf t})) } \nonumber  \end{eqnarray}
+
+where ${\bf D} = {({\bf k}(\tilde{{\bf t}},\tilde{{\bf t}}) -{\bf k}(\tilde{{\bf t}},{{\bf t}})( {\bf k}({\bf t},{\bf t}) + \sigma^2{\bf I}_n)^{-1}{\bf k}({{\bf t}},\tilde{{\bf t}}))}^{-1}$, ${\bf B} = -({\bf K}({\bf t},{\bf t}) + \sigma^2{\bf I}_n)^{-1}{\bf k}({\bf t},\tilde{{\bf t}}){\bf D}$ and ${\bf A} = ({\bf k}({\bf t},{\bf t}) + \sigma^2{\bf I}_n)^{-1}({\bf I}_n - {\bf k}({\bf t},\tilde{{\bf t}}){\bf B}')$.
+
+From this, we can determine that ${\bm \mu}(\tilde{\bf t}) | {\bf y}, {\bf t}, \sigma^2_K, l, \sigma^2$ is normally distributed with mean $-{\bf D}^{-1}{\bf B}'{\bf y}$ and variance-covariance matrix ${\bf D}^{-1}$, or in the original notation,
+
+\[ p({\bm \mu}(\tilde{\bf t}) | {\bf y}, {\bf t}, \sigma^2_K, l, \sigma^2) = \mathcal{N}({\bf k}(\tilde{{\bf t}},{{\bf t}})( {\bf k}({\bf t},{\bf t}) + \sigma^2{\bf I}_n)^{-1}{\bf y},{\bf k}(\tilde{{\bf t}},\tilde{{\bf t}}) -{\bf k}(\tilde{{\bf t}},{{\bf t}})( {\bf k}({\bf t},{\bf t}) + \sigma^2{\bf I}_n)^{-1}{\bf k}({{\bf t}},\tilde{{\bf t}})).  \]
+
+As we know all parameters of this distribution, we can directly determine the posterior and construct the plots without using sampling techniques.
+
+```{r, fig3, fig.height=6.0, fig.width=6.0}
+call<-read.csv('calldata.csv',header=TRUE)
+
+y<-call$length
+t<-call$hour
+n<-length(y)
+t.all<-c(call$hour,0:23)  #times of predictions and observations
+#Construct K.
+np<-length(t.all)
+mT<-matrix(t.all,np,np)
+Kall<- 1.21*exp(-0.5*sin( (mT-t(mT))*pi/24)^2 )
+
+yvarinv<-solve(Kall[1:n,1:n]+0.49*diag(n))
+p.mean <- Kall[(n+1):np,1:n]%*%yvarinv%*%y
+p.var  <- Kall[(n+1):np,(n+1):np] - Kall[(n+1):np,1:n]%*%yvarinv%*%Kall[1:n,(n+1):np]
+mean.fun<-function(x){a<-1.21*exp(-0.5*sin((x-t)*pi/24)^2)%*%yvarinv%*%y;return(a) } 
+   #Here x is a scalar.
+cov.fun<- function(x){ #Here x is a scalar
+  av<-exp(-0.5*sin((x-t)*pi/24)^2)
+  a<-1.21 -(1.21^2)*t(av)%*%yvarinv%*%av
+  return(a) }
+
+#Lower and upper limits of credible intervals
+LL90<-qnorm(0.05,mean=p.mean,sd=sqrt(diag(p.var)))
+LL95<-qnorm(0.025,mean=p.mean,sd=sqrt(diag(p.var)))
+UL90<-qnorm(0.95,mean=p.mean,sd=sqrt(diag(p.var)))
+UL95<-qnorm(0.975,mean=p.mean,sd=sqrt(diag(p.var)))
+
+#Constructing plots.
+ylims=c(min(c(LL95,y))-0.05,max(c(UL95,y))+0.05 )
+plot(p.mean,type='l',ylim=ylims,xlab='t',ylab=expression(paste( mu,'(t)',sep='') ), 
+main='Estimates from Gaussian process model')
+lines(LL90,col=2,lty=2)
+lines(UL90,col=2,lty=2)
+lines(LL95,col=3,lty=2)
+lines(UL95,col=3,lty=2)
+points(t,y,pch=19)
+legend('topright',legend=c('90 % CI', '95 % CI'),col=2:3,lty=2)
+
+#as curves via vectorization of mean.fun, cov.fun and other functions.
+#The predictions at unobserved times produced by this vectorization are
+#regarded as independent of each other, which is a problem.
+mf <-Vectorize(mean.fun)
+LL90<-function(x){a<-qnorm(0.05,mean=mean.fun(x), sd= sqrt(cov.fun(x)));return(a)}
+UL90<-function(x){a<-qnorm(0.95,mean=mean.fun(x), sd= sqrt(cov.fun(x)));return(a)}
+LL95<-function(x){a<-qnorm(0.025,mean=mean.fun(x), sd= sqrt(cov.fun(x)));return(a)}
+UL95<-function(x){a<-qnorm(0.975,mean=mean.fun(x), sd= sqrt(cov.fun(x)));return(a)}
+LL90v <-Vectorize(LL90)
+UL90v <-Vectorize(UL90)
+LL95v <-Vectorize(LL95)
+UL95v <-Vectorize(UL95)
+
+curve(mf,xlim=c(0,23),ylim=ylims,xlab='t',ylab=expression(paste( mu,'(t)',sep='') ), 
+      main='Estimates from Gaussian process model')
+curve(LL90v, add=TRUE,col=2,lty=2)
+curve(UL90v, add=TRUE,col=2,lty=2)
+curve(LL95v, add=TRUE,col=3,lty=2)
+curve(UL95v, add=TRUE,col=3,lty=2)
+points(t,y,pch=19)
+legend('topright',legend=c('90 % CI', '95 % CI'),col=2:3,lty=2)
+
+```
+
+

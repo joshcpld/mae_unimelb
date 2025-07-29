@@ -1,0 +1,55 @@
+---
+title: 'Week 7 lab MAST90125: Bayesian Statistical learning'
+header-includes:
+- \usepackage{bm}
+- \usepackage{amsmath}
+output:
+  pdf_document:
+    number_sections: no
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+\vspace{-1 mm}
+
+
+## Question One
+
+Consider a Poisson regression, 
+\[
+{y}_i \sim \text{Pois}({\lambda}_i) \quad \mbox{and} \quad
+\log({\lambda}_i) = \mathbf{x}_i'\bm \beta, \quad \bm{\beta}\in \mathbb{R}^p
+\]
+
+In lectures we learned various techniques for approximating the posterior distribution. In this lab, attempt as many of these techniques as possible to complete the following tasks. 
+
+Consider the dataset \texttt{Warpbreaks.csv}, which can be downloaded from Canvas. This dataset contains information of the number of breaks in a consignment of wool. In addition, Wool type (A or B) and tension level (L, M or H) are recorded. To investigate the association between the number of breaks and wool type, various forms of generalised linear model are proposed where Bayesian computing techniques should be used.
+  
+
+As a reminder the following techniques will be considered for approximating the posterior distribution.
+
+\begin{itemize}
+\item Metropolis-Hastings algorithm. 
+\item Gibbs sampler. 
+
+\end{itemize}
+When coding, assume the prior for the coefficients $\bm \beta \sim N({\bf 0}, 5{\bf I}_p)$. 
+
+Some hints:
+
+An initial guess can be determined from fitting a Poisson regression using the function \texttt{glm}. Treat wool type as a factor using the function \texttt{glm}
+
+```{r}
+warpbreak= read.csv(file = './warpbreaks.csv',header=TRUE) 
+#This line will need to be changed when you run this yourself.
+mod<-glm(breaks~as.factor(wool),data=warpbreak,family='poisson')
+summary(mod)
+Sigma <-vcov(mod); Sigma
+X<-model.matrix(mod)
+```
+
+
+

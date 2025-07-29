@@ -1,0 +1,54 @@
+---
+title: 'Lecture 8 R scripts'
+header-includes:
+   - \usepackage{bm}
+   - \usepackage{amsmath}
+output: 
+  pdf_document:
+    number_sections: no
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+set.seed(123456)
+```
+
+## Direct approximation
+
+This example of direct approximation of the posterior is the case of an inverse variance component. The joint pdf $p(\mathbf{y},\tau)$ is
+$$\frac{\tau^{n/2}}{(2\pi)^{n/2}}e^{-\frac{\tau}{2}[(n-1)s^2+n(\bar{y}-\mu)^2]}\times \frac{\beta^\alpha \tau^{\alpha-1}e^{-\beta\tau}}{\Gamma(\alpha)}
+\propto \tau^{n/2+\alpha-1}e^{-\frac{1}{2}\tau[(n-1)s^2+n(\bar{y}-\mu)^2+2\beta]}$$
+and values of hyper-parameters and sufficient statistics are $\mu=5$, $\bar{y}=4.88$, $n=10$, $s^2=1.23$ and $\alpha=\beta=1$.
+
+```{r, fig.height = 4, fig.width = 8}
+set.seed(123456)
+  #Hyper-parameters and sufficient statistics.
+mu= 5; bary= 4.88; n=10; s2 = 1.23; a=b=1
+N<-1000; i<-0:(N-1)/(N-1)*2.5 
+  #Building a grid of points to evaluate the un-normalised density
+
+Qt<-function(x){x^(0.5*n+a-1)*exp(-0.5*x*((n-1)*s2+n*(bary-mu)^2+2*b))}
+  #Un-normalised density
+
+DA<-sapply(i,FUN=Qt,simplify=TRUE) 
+ #Evaluate un-normalised density at selected points
+
+pmf<-DA/sum(DA) #Normalise
+
+cdf.DA<-cumsum(pmf) #Construct empirical cdf.
+par(mfrow=c(1,2));plot(i,pmf,type="s");plot(i,cdf.DA,type="s");par(mfrow=c(1,1))
+sam.u<-runif(10000) 
+ 
+  #Generate random variable using inverse cdf method.
+ind.post<-sapply(sam.u, FUN=function(x) which(abs(cdf.DA - x)== min(abs(cdf.DA -x))))
+sam.post<-i[ind.post]
+ 
+ #Histogram of random sample drawn using direct approximation
+hist(sam.post,breaks=100,freq=FALSE,xlab=expression(tau), 
+     main='Histogram of Direct approximation posterior sample')
+
+#Overlapping the analytic posterior over histogram
+curve(dgamma(x,0.5*n+a,0.5*(n-1)*s2+0.5*n*(bary-mu)^2+b),0,2.5,
+  xlab=expression(tau),ylab=expression(paste(p(tau,' |y'))), add=TRUE)
+```
+

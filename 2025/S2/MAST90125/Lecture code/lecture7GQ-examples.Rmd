@@ -1,0 +1,65 @@
+---
+title: 'Lecture 7: R script, MAST90125 Bayesian Statistical Learning'
+header-includes:
+   - \usepackage{bm}
+   - \usepackage{amsmath}
+output: 
+  pdf_document:
+    number_sections: no
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+set.seed(123456)
+```
+
+## Example one: Regression.
+
+```{r}
+set.seed(123456)
+n=100; p =2
+x<-runif(100,1,5) #Generate predictor variable.
+y<- -0.2+ 4*x +rnorm(100,0,1.5) #Simulate response variable
+mod<-lm(y~x) #Fit model
+SSE<-sum(mod$resid^2) #Estimate SSE
+sigma2hat<-SSE/(100-2)#Estimate sigmaˆ2
+sigma2hat
+
+#Estimating WAIC.
+iter=1000 #Number of iterations
+lppd<-matrix(0,100,iter) #storing log posterior predictive densities.
+library(mvtnorm) #R package for drawing from multivariate normal.
+for(i in 1:iter){
+  tau = rgamma(1,0.5*(100-2), 0.5*SSE) #Estimate inverse variance from marginal posterior.
+  #Note this is just an extension of marginal posterior in lab 2, q1, 
+  #but 2 rather than 1 parameters are estimated.
+  sigma2 = 1/tau #Convert inverse variance to variance
+  #Estimate beta from conditional posterior.
+  #Note by extracting vcov from lm fit, we need to remove sˆ2 to obtain XTXinv.
+  #beta.s = rmvnorm(1,mean=mod$coef,sigma=vcov(mod)/sigma2hat*sigma2)
+  
+  beta.s<-rmvt(1, sigma=vcov(mod)/sigma2hat*sigma2, df=n-p,delta=coef(mod)) 
+  #Estimate beta from posterior
+  lppd[,i]= dnorm(y,mean=beta.s[1]+x*beta.s[2],sd=sqrt(sigma2)) 
+  #Saving lppd for simulation s.
+}
+lppdest = sum(log(rowMeans(lppd))) #Estimating lppd for whole dataset.
+pwaic2 = sum(apply(log(lppd),1,FUN=var)) #Estimating effective number of parameters.
+#Comparing AIC and WAIC
+AIC(mod)
+
+WAIC= -2*lppdest + 2*pwaic2; WAIC
+```
+##
+
+
+## Example two: Bayes factor for sample proportion. $H_0: p= 0.2$ vs. $H_A: p \sim U(0,1)$.
+
+```{r, fig1a, fig.height = 4, fig.width = 8}
+p0<-0.2;p1<-0.215
+#Plotting the Bayes Factor for range of n.
+#For illustrative purposes, y is chosen as the nearest as the nearest integer to n*p.
+n=1:(200*50)
+plot(n,dbinom(round(n*p1),n,p0)*(n+1),type='l',ylab='Bayes Factor',xlab='n')
+abline(h=1)
+```

@@ -1,0 +1,159 @@
+---
+title: 'Week 7 Lab Solutions -- MAST90125: Bayesian Statistical learning'
+header-includes:
+   - \usepackage{bm}
+   - \usepackage{amsmath}
+output: 
+  pdf_document:
+    number_sections: no
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+\vspace{-1 mm}
+
+
+## Question One
+
+Consider a Poisson regression, 
+\[
+{y}_i \sim \text{Pois}({\lambda}_i) \quad \mbox{and} \quad
+\log({\lambda}_i) = \mathbf{x}_i'\bm \beta, \quad \bm{\beta}\in \mathbb{R}^p
+\]
+
+In lectures we learned various techniques for approximating the posterior distribution. In this lab, attempt as many of these techniques as possible to complete the following tasks. 
+
+Consider the dataset \texttt{Warpbreaks.csv}, which can be downloaded from Canvas. This dataset contains information of the number of breaks in a consignment of wool. In addition, Wool type (A or B) and tension level (L, M or H) are recorded. To investigate the association between the number of breaks and wool type, various forms of generalised linear model are proposed where Bayesian computing techniques should be used.
+  
+
+As a reminder the following techniques will be considered for approximating the posterior distribution.
+
+\begin{itemize}
+\item Metropolis-Hastings algorithm. 
+\item Gibbs sampler. 
+
+\end{itemize}
+When coding, assume the prior for the coefficients $\bm \beta \sim N({\bf 0}, 5{\bf I}_p)$. 
+
+Some hints:
+
+An initial guess can be determined from fitting a Poisson regression using the function \texttt{glm}. Treat wool type as a factor using the function \texttt{glm}
+
+```{r}
+set.seed(123456)
+warpbreak= read.csv(file = './warpbreaks.csv',header=TRUE) 
+#This line will need to be changed when you run this yourself.
+mod<-glm(breaks~as.factor(wool),data=warpbreak,family='poisson')
+summary(mod)
+Sigma <-vcov(mod); Sigma
+X<-model.matrix(mod)
+```
+
+\newpage
+
+**Metropolis-Hastings code**
+
+
+```{r fig1e, fig.height = 4, fig.width = 8}
+#Part one: function for performing Metropolis-Hastings sampling for
+#Poisson regression. Proposed transition distribution is normal, 
+#with mean = betahat and variance-covariance matrix c^2*Sigma.
+#Namely,Q(theta(t)|theta(t-1)) = N(theta(t)|thetamean=betahat, c^2*Sigma) 
+#Inputs:
+#y: vector of responses
+#X: predictor matrix including intercept.
+#c: scalar associated with the variance-covariance matrix, 
+#thetamean: mean vector for the proposed transition distribution Q.
+#Sigma: variance covariance matrix parameter in Q
+#iter: number of iterations
+#burnin: number of initial iterations to throw out.
+library(mvtnorm)
+MetropolisHastings.fn<-function(y,X,c,thetamean,Sigma,iter,burnin){ 
+p <-dim(X)[2]    #number of parameters
+
+theta0<-rnorm(p)  #initial values
+thetas<-matrix(0,iter,p)  #matrix to store values.
+thetas[1,]<-theta0
+indi<-0
+for(i in 1:(iter-1)){
+theta_t <-rmvnorm(1,mean=thetamean,sigma=c^2*Sigma) #draw candidate
+theta_t <-as.numeric(theta_t)
+xbc       <-X%*%theta_t
+p.c        <-exp(xbc)  #Calculate lambda for candidate.
+xb         <-X%*%thetas[i,]
+p.b        <-exp(xb)    #Calculate lambda for theta(t-1)
+#Note for code to work correctly, sum goes over only the dpois part because dpois
+#evaluated over multiple observations is a vector but the dmvnorm 
+#for candidate/previous iteration is a scalar.
+r_up<-sum(dpois(y,lambda=p.c,log=TRUE))+sum(dnorm(theta_t,0,sqrt(5),log=TRUE)) + 
+  dmvnorm(thetas[i,],mean=thetamean,sigma=c^2*Sigma,log=TRUE)  
+ #log joint dist + log proposal at the previous state
+r_low<-sum(dpois(y,lambda=p.b,log=TRUE))+sum(dnorm(thetas[i,],0,sqrt(5),log=TRUE)) + 
+  dmvnorm(theta_t,mean=thetamean,sigma=c^2*Sigma,log=TRUE)  
+  #log joint dist + log proposal for the candidate state.
+r <-r_up-r_low  #difference of log acceptance rate
+#Draw an indicator whether to accept/reject candidate
+ind<-rbinom(1,1,exp( min(c(r,0)) ) )
+thetas[i+1,]<- ind*theta_t + (1-ind)*thetas[i,]
+indi<-indi+ind
+}
+indi
+#discard initial iterations
+results<-thetas[-c(1:burnin),]
+names(results)<-c('beta0','beta1') #column names
+return(results)
+}
+
+#formatting data into the correct format. 
+
+#one way to determine betaest and Sigma
+# betaest<-mod$coef
+# Sigma=vcov(mod)
+# mod$coef
+# Sigma
+#another way to determine betaest and Sigma
+modest <-lm(log(breaks)~as.factor(wool),data=warpbreak)
+betaest<-modest$coef
+Sigma <-vcov(modest)
+betaest
+Sigma
+
+attempt2<-MetropolisHastings.fn(y=warpbreak$breaks,X=X,c=1,thetamean=betaest,Sigma=Sigma,
+                                iter=10000,burnin=2000)
+
+#Posterior means
+colMeans(attempt2)
+#Posterior standard deviations
+apply(attempt2,2,FUN=sd)
+#95 % central credible intervals  
+apply(attempt2,2,FUN=function(x) quantile(x,c(0.025,0.975)) )
+
+par(mfrow=c(1,2))
+#Plot marginal posteriors 
+plot(density(attempt2[,1]),type='l',xlab=expression(beta[0]),ylab='posterior density', 
+     main='Metropolis-Hastings Algorithm')
+plot(density(attempt2[,2]),type='l',xlab=expression(beta[1]),ylab='posterior density', 
+     main='Metropolis-Hastings Algorithm')
+
+length(unique(attempt2[,1]))
+
+#Plot the simulated beta samples
+plot(attempt2[,1], xlab='Iteration', ylab=expression(beta[0]), type='l',
+     main=expression(paste(beta[0], ' sequence generated by MH')))
+plot(attempt2[,2], xlab='Iteration', ylab=expression(beta[1]), type='l',
+     main=expression(paste(beta[1], ' sequence generated by MH')))
+
+#ACF plot
+acf(attempt2[,1], main=expression(beta[0]), cex.main=2)
+acf(attempt2[,2], main=expression(beta[1]), cex.main=2)
+```
+
+
+
+**Gibbs sampler**
+
+It can be shown that the posterior pdf of $\bm{\beta}=(\beta_0, \beta_1)'$ is 
+$$p(\beta_0,\beta_1|(y_1,x_1), \cdots, (y_n,x_n)) \propto \exp\{(\sum_i y_i)\beta_0+(\sum_i y_ix_i)\beta_1-0.1(\beta_0^2+\beta_1^2)-e^\beta_0(\sum_i e^{x_i\beta_1})\}.$$
+Thus, it is difficult to find the conditional posterior pdf of $\beta_0$ given $\beta_1$ and that of $\beta_1$ given $\beta_0$. Therefore, Gibbs sampler is not a good method for the problem considered here.

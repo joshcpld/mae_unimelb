@@ -1,0 +1,286 @@
+---
+title: 'Lecture 18 Rscript, Poisson lognormal model'
+header-includes:
+   - \usepackage{bm}
+   - \usepackage{amsmath}
+output: 
+  pdf_document:
+    number_sections: no
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+\vspace{5 mm}
+
+
+## Example dataset
+
+The data is given in \texttt{lymphocyte.csv}, which is available on Canvas. It consists of 84 lymphocyte counts ($y$), along with recorded dosage ($d$) and log cell counts ($log_count$). We will fit a Poisson regression to this data, while allowing for over-dispersion by including an normal error term in the log link function. This means the vector of link functions can be represented as
+
+\[ \log(\bm \lambda) = {\bf X} \bm \beta + \bm \epsilon, \quad \bm \epsilon \sim \mathcal{N}(0,\sigma^2{\bf I}) \]
+
+where $\bf X$ is the predictor matrix whose columns will contain an intercept, column for dosage and column of log cell counts.
+
+Assume a flat prior for $\bm \beta$ and $\text{Ga}(\alpha,\gamma)$ prior for the precision. 
+
+## Aims for this coding session.
+
+We want to show that the data augmentation strategy we outlined in the notes does give proper Bayesian inference. To do this, we will compare our results to those obtained using stan. Secondly, we want to check the impact of inappropriate data augmentation.
+
+\paragraph{Function one: Metropolis in Gibbs algorithm for fitting the Poisson lognormal model}
+
+```{r}
+#Inputs:
+#y: vector of responses
+#X: predictor matrix including intercept.
+#sigma0:  initial value for residual standard deviation of link,
+#iter: number of iterations
+#burnin: number of initial iterations to throw out.
+#a,b:   hyper-parameters of gamma prior for precision = inverse of the variance.
+
+PoisLN.reg<-function(X,y,sigma0,iter,burnin,a,b){
+n      <-length(y)  
+p      <-dim(X)[2]
+loglambda0<-log(y+0.01)  
+sdpros <-1/sqrt(y)
+XTX <-crossprod(X)
+XTXinv <-solve(XTX)
+H      <-XTXinv%*%t(X)
+sigma2  <-sigma0^2
+
+#function of updating
+joint.fun <- function(y,x,xb,tau,a,b){
+  p1<-dpois(y,exp(x),log=TRUE)
+  p2<-dnorm(x,mean=xb,sd=1/sqrt(tau),log=TRUE)
+  p3<-dgamma(tau,a,b,log=TRUE)
+  return(p1+p2+p3)
+}
+
+#storing matrix
+par<-matrix(0,iter,n+p+1)
+library(MASS)
+
+for(i in 1:iter){
+#Update co-efficients and variance.
+bhat  <- H%*%loglambda0
+beta  <- mvrnorm(1,mu=bhat,Sigma=XTXinv*sigma2)
+Xb    <- X%*%beta
+SSE   <- sum((loglambda0-Xb)^2)
+tau   <- rgamma(1,0.5*n+a,0.5*SSE+b)
+sigma2<- 1/tau
+
+#Update link (Sequence of independent Metropolis)
+loglambda.cand <-rnorm(n,loglambda0,2.4*sdpros)
+r  <- joint.fun(y,loglambda.cand,Xb,tau,a,b) - joint.fun(y,loglambda0,Xb,tau,a,b)
+r[r>0]<-0
+ind<-rbinom(n,1,exp(r) )
+loglambda0<-ind*loglambda.cand+(1-ind)*loglambda0
+  
+par[i,]<-c(loglambda0,as.numeric(beta),sigma2)  
+}
+
+par <- par[-c(1:burnin),]  
+colnames(par)<-c(paste('log(lambda)',1:n,sep=''),paste('beta',1:p,sep=''),'sigma2')
+return(par)
+}
+```
+
+\paragraph{Fitting the model to the lymphocyte data}
+
+
+```{r}
+lymphocyte<-read.csv(file='./lymphocyte.csv', head=TRUE)
+y         <-lymphocyte$y
+n         <-length(y)
+X         <-cbind(rep(1,n),lymphocyte$d,lymphocyte$log_count)
+N_i       <-11000
+
+chain1<-PoisLN.reg(X=X,y=y,sigma0=1,iter=N_i,burnin=1000,a=0.001,b=0.001)
+chain2<-PoisLN.reg(X=X,y=y,sigma0=0.2,iter=N_i,burnin=1000,a=0.001,b=0.001)
+chain3<-PoisLN.reg(X=X,y=y,sigma0=5,iter=N_i,burnin=1000,a=0.001,b=0.001)
+dim(chain1[5000+1:5000,])
+dim(chain1[5001:10000,])
+
+library(coda)
+rml1<-as.mcmc.list(as.mcmc((chain1[1:5000,])))
+rml2<-as.mcmc.list(as.mcmc((chain2[1:5000,])))
+rml3<-as.mcmc.list(as.mcmc((chain3[1:5000,])))
+rml4<-as.mcmc.list(as.mcmc((chain1[5000+1:5000,])))
+rml5<-as.mcmc.list(as.mcmc((chain2[5000+1:5000,])))
+rml6<-as.mcmc.list(as.mcmc((chain3[5000+1:5000,])))
+rml<-c(rml1,rml2,rml3,rml4,rml5,rml6)
+
+#Gelman-Rubin diagnostic.
+gelman.diag(rml)[[1]]
+#effective sample size.
+effectiveSize(rml)
+```
+
+
+\paragraph{Function for Inappropriate data augmentation in Poisson-lognormal model}
+```{r, fig1, fig.height=10, fig.width=10}
+#Inputs:
+#y: vector of responses
+#X: predictor matrix including intercept.
+#sigma0:  initial value for residual standard deviation of link,
+#iter: number of iterations
+#burnin: number of initial iterations to throw out.
+#a,b:   hyper-parameters of gamma prior for precision.
+
+BADPoisLN.reg<-function(X,y,sigma0,iter,burnin,a,b){
+  n      <-length(y)  
+  p      <-dim(X)[2]
+  loglambda0<-log(y+0.01)  
+  sdpros <-1/sqrt(y)
+  XTX <-crossprod(X)
+  XTXinv <-solve(XTX)
+  H      <-XTXinv%*%t(X)
+  sigma2  <-sigma0^2
+  
+  #storing matrix
+  par<-matrix(0,iter,n+p+1)
+  library(MASS)
+  
+  for(i in 1:iter){
+    #Update co-efficients and variance.
+    bhat  <- H%*%loglambda0
+    beta  <- mvrnorm(1,mu=bhat,Sigma=XTXinv*sigma2)
+    Xb    <- X%*%beta
+    SSE   <- sum((loglambda0-Xb)^2)
+    tau   <- rgamma(1,0.5*n+a,0.5*SSE+b)
+    sigma2<- 1/tau
+    
+    #Update link, incorrect just using Gamma posterior
+    loglambda0<-log(rgamma(n,a+y,b+1))
+    
+    par[i,]<-c(loglambda0,as.numeric(beta),sigma2)  
+  }
+  
+  par <- par[-c(1:burnin),]  
+  colnames(par)<-c(paste('log(lambda)',1:n,sep=''),paste('beta',1:p,sep=''),'sigma2')
+  return(par)
+}
+
+chain4<-BADPoisLN.reg(X=X,y=y,sigma0=1,iter=N_i,burnin=1000,a=0.001,b=0.001)
+chain5<-BADPoisLN.reg(X=X,y=y,sigma0=0.2,iter=N_i,burnin=1000,a=0.001,b=0.001)
+chain6<-BADPoisLN.reg(X=X,y=y,sigma0=5,iter=N_i,burnin=1000,a=0.001,b=0.001)
+
+library(coda)
+bml1<-as.mcmc.list(as.mcmc((chain4[1:5000,])))
+bml2<-as.mcmc.list(as.mcmc((chain5[1:5000,])))
+bml3<-as.mcmc.list(as.mcmc((chain6[1:5000,])))
+bml4<-as.mcmc.list(as.mcmc((chain4[5000+1:5000,])))
+bml5<-as.mcmc.list(as.mcmc((chain5[5000+1:5000,])))
+bml6<-as.mcmc.list(as.mcmc((chain6[5000+1:5000,])))
+bml<-c(bml1,bml2,bml3,bml4,bml5,bml6)
+
+#Gelman-Rubin diagnostic.
+gelman.diag(bml)[[1]]
+#effective sample size.
+effectiveSize(bml)
+
+```
+
+\paragraph{Comparing results}
+
+```{r}
+
+#Combining chains.
+
+#Correct augmentation
+chain.combine1<-rbind(chain1,chain2,chain3)
+#Incorrect augmentation
+chain.combine2<-rbind(chain4,chain5,chain6)
+
+
+#Finding posterior means
+
+colMeans(chain.combine1) #Correct augmentation.
+colMeans(chain.combine2) #Incorrect augmentation.
+
+#Posterior standard deviations
+
+apply(chain.combine1,2,FUN=sd ) #Correct augmentation
+apply(chain.combine2,2,FUN=sd ) #Incorrect augmentation
+
+#95 % Credible intervals.
+apply(chain.combine1,2,FUN=function(x){ quantile(x,c(0.025,0.975))} ) #Correct augmentation
+apply(chain.combine2,2,FUN=function(x){ quantile(x,c(0.025,0.975))} ) #Incorrect augmentation
+```
+
+\paragraph{Stan code for implementing the Poisson-lognormal model}
+
+
+This code is avaiable on Canvas as \texttt{Poisson-lognormal.stan}.
+
+\begin{footnotesize}
+\begin{verbatim}
+//
+// This Stan program defines a Poisson-lognormal regression
+//
+// Learn more about model development with Stan at:
+//
+//    http://mc-stan.org/users/interfaces/rstan.html
+//    https://github.com/stan-dev/rstan/wiki/RStan-Getting-Started
+//
+
+data {
+  int<lower=0> n;   //number of observations
+  int<lower=0> P;   //number of parameters
+  int<lower=0> y[n];          //response vector
+  matrix[n,P] X;     //design matrix (includes intercept)
+}
+
+
+// The parameters accepted by the model. 
+// accepts two sets of parameters 'beta', and 'sigma'.
+parameters {
+  vector[P] beta; //vector of fixed effects of length P.
+  vector[n] llambda; //vector of link function.
+  real<lower=0> tau; //residual precision
+}
+
+transformed parameters {
+  real<lower=0> sigma;
+  sigma = pow(tau, -0.5); //residual standard deviation
+}
+
+// The model to be estimated. We model the output
+// 'llambda' to be normal with mean X*beta and variance sigma.
+// We assume y is Poisson with parameter exp(llambda)
+// and  a vague gamma prior for tau = 1/sigma^2.
+model {
+  y ~ poisson(exp(llambda));  //likelihood
+  llambda ~ normal(X*beta,sigma); //augmented variable     
+  tau ~ gamma(0.001,0.001); //prior
+}
+
+\end{verbatim}
+\end{footnotesize}
+
+
+```{r}
+#fitting model using stan. You may need to install Rtools to get this to work. The stan file is available 
+#from canvas as Poisson-lognormal.stan. This should go in the file.choose() position.
+library(rstan)
+P<-dim(X)[2]
+#Formatting inputs.
+pois.reg<-stan(file='./Poisson-lognormal.stan',data=c('X','y','n','P'),iter=2000,chains=4)
+print(pois.reg)
+#Stan.
+myresults<-extract(pois.reg)
+chain.stan <- cbind(myresults$llambda,myresults$beta,myresults$sigma^2)
+#Finding posterior means
+
+colMeans(chain.stan)     #Stan.
+
+#Posterior standard deviations
+
+apply(chain.stan,2,FUN=sd ) #Stan
+
+#95 % Credible intervals.
+apply(chain.stan,2,FUN=function(x){ quantile(x,c(0.025,0.975))} ) #Stan
+```

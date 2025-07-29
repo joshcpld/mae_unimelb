@@ -1,0 +1,153 @@
+---
+title: 'Week 4 lab solutions -- MAST90125: Bayesian Statistical learning'
+header-includes:
+- \usepackage{bm}
+- \usepackage{amsmath}
+output:
+  pdf_document:
+    number_sections: no
+  html_document:
+    df_print: paged
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+\vspace{1mm}
+
+## Question One
+
+We have seen residual plots in lectures. One example is a case where observations $y_i$ are simulated using \begin{equation}
+y_i=\beta_0+\beta_1x_i+\beta_2x_i^2+\varepsilon_i, \quad \varepsilon_i \sim \mathcal{N}(0,\sigma^2)\quad i=1,\cdots, n, 
+\label{eq1}
+\end{equation} but the model fitted was \begin{equation}
+y_i=\beta_0+\beta_1x_i+\varepsilon_i, \quad i=1,\cdots, n.
+\label{eq2}
+\end{equation} 
+Simulate 2000 datapoints according to (\ref{eq1}) and fit the model (\ref{eq2}) to this data and answer the following.
+
+```{r}
+#Step 1: Simulate an explanatory variable
+set.seed(123456)
+n<-2000; x<-rnorm(n)
+beta<-c(1.5,1.5,-0.5) #Specify co-efficient values
+X<-cbind(rep(1,n),x,x^2) #Create predictor matrix
+y<-X%*%beta + rnorm(n)*1.4 #Create response vector with i.i.d. errors
+y<-as.numeric(y)
+#We have shown a t-test can be interpreted in a Bayesian way, so can fixed-effect 
+#regression. Therefore just estimate co-efficients using the lm function.
+#Then extract co-efficients and estimate of residual variance.
+#Note the question says to fit a model with only a linear term for x.
+Xm <-X[,1:2] #Component of X matrix used in model fit.
+mod<-lm(y~0+Xm) #Estimate was coded in X matrix, suppress this with 0 in lm.
+  #Note as intercept was included, remove second term.
+betaest<-mod$coef; betaest
+s2 <-summary(mod)$sigma^2; s2
+```
+
+```{=tex}
+\renewcommand\labelenumi{\alph{enumi})}
+\begin{enumerate}
+\item
+For your simulated data, generate replicate data from the posterior predictive distribution, and construct
+two test statistics such that one will suggest poor model fit and the other will suggest good model fit.
+
+\textsf{Hint}: In week 2 lab, we found a Bayesian interpretation of a $t$-test in the context of estimating a mean. Generalise
+this to the regression case. %Note, it will be easier to simulate $\bm{\beta}$ conditional on $\sigma^2, y$ rather than just $y$ alone.
+\item
+Perform a marginal check, that is calculate
+$$p_i=\mbox{Pr}(y_i^{\mbox{\scriptsize rep}}\leq y_i|y_1,\cdots, y_n)$$
+Comment on the distribution of $p_i$, including a discussion of whether this marginal check was appropriate for
+checking model plausibility in this example. Graphical summaries may prove useful.
+\end{enumerate}
+
+To answer \textbf{part a)}, draw $\bm{\beta}$ from multivariate normal with mean $\hat{\bm{\beta}}_{MLE}$ and variance $\sigma^2(X^\top X)^{-1}$, or from multivariate $t$ with $df=n-p$, location $\hat{\bm{\beta}}_{MLE}$, and scale matrix $s^2(X^\top X)^{-1}$. 
+Also draw $\tau = (\sigma^2)^{-1}$ from gamma distribution with parameters $a=(n-p)/2$, $b=(n-p)s2/2$. In this case $p=2$ as we estimate an intercept and slope.
+```
+
+```{r}
+library(mvtnorm)
+XTXinv <-solve(crossprod(Xm)) #Note drop the last column as it was not fitted in the lm.
+n<-length(y);p<-dim(Xm)[2]
+iter = 3000
+vyrep1<-vyrep2<-rangeyrep1<-rangeyrep2<-0 #Storing test statistics.
+for(i in 1:iter){
+  tau <-rgamma(1,0.5*(n-p),0.5*(n-p)*s2) #draw a precision
+  sigma2 <-1/tau #convert to variance
+  betarep1<- rmvnorm(1,mean=betaest,sigma=sigma2*XTXinv ) #draw co-efficient
+  betarep2<- rmvt(1, sigma=s2*XTXinv, df=n-2,delta=betaest) 
+  Xbetarep1 <- Xm%*%as.vector(betarep1)
+  Xbetarep2 <- Xm%*%as.vector(betarep2)
+  yrep1 <-Xbetarep1+rnorm(n)*sqrt(sigma2) #create replicate dataset 1.
+  yrep2 <-Xbetarep2+rnorm(n)*sqrt(sigma2) #create replicate dataset 2.
+  yrep1 <-as.numeric(yrep1); yrep2 <-as.numeric(yrep2)
+  vyrep1[i] <-var(yrep1) #Example of poor choice of diagnostic.
+  vyrep2[i] <-var(yrep2) #Example of poor choice of diagnostic.
+  rangeyrep1[i] <-diff(range(yrep1)) # A better choice of test diagnostic.
+  rangeyrep2[i] <-diff(range(yrep2)) # A better choice of test diagnostic.
+}
+table(vyrep1>var(y))
+table(vyrep2>var(y))
+table(rangeyrep1>diff(range(y)))
+table(rangeyrep2>diff(range(y)))
+```
+
+```{=tex}
+To answer \textbf{part b)}:
+```
+
+```{r fig1b, fig.height = 4, fig.width = 8}
+pvec1<- pvec2 <-rep(0,n)
+for(i in 1:iter){
+  tau <-rgamma(1,0.5*(n-p),0.5*(n-p)*s2) #draw a precision
+  sigma2 <-1/tau #convert to variance
+  betarep1<- rmvnorm(1,mean=betaest,sigma=sigma2*XTXinv ) #draw co-efficient
+  betarep2<- rmvt(1, sigma=s2*XTXinv, df=n-2,delta=betaest)
+  Xbetarep1 <- Xm%*%as.vector(betarep1)
+  Xbetarep2 <- Xm%*%as.vector(betarep2)
+  yrep1 <-Xbetarep1+rnorm(n)*sqrt(sigma2) #create replicate dataset 1.
+  yrep2 <-Xbetarep2+rnorm(n)*sqrt(sigma2) #create replicate dataset 2.
+  yrep1 <-as.numeric(yrep1); yrep2 <-as.numeric(yrep2)
+  pvec1[yrep1 < y] <-pvec1[yrep1 <y]+1
+  pvec2[yrep2 < y] <-pvec2[yrep2 <y]+1
+}
+#Histogram of marginal p-values.
+hist(pvec1/iter,xlab=expression(p[i]),main='Histogram of marginal checks',breaks=20)
+#Compare to prediction of fitted values.
+plot(predict(mod),pvec1/iter,ylab=expression(p[i]),xlab='Fitted value')
+
+hist(pvec2/iter,xlab=expression(p[i]),main='Histogram of marginal checks',breaks=20)
+#Compare to prediction of fitted values.
+plot(predict(mod),pvec2/iter,ylab=expression(p[i]),xlab='Fitted value')
+```
+
+```{=tex}
+If model (2) is a good approximation of model (1), each $p_i$ value should be around 0.5. Both histograms of all $p_i$ values, however, look like a uniform distribution over $[0, 1]$. This suggests model (2) is not a good approximation of model (1). Same conclusion can be obtained from the two scatter plots of $p_i$ versus $y_i$. It can be verified that the parameter $\beta_2$ in model (1) is significantly different from 0, confirming that model (2) is not a good estimation of the true model (1).
+```
+## Question Two
+
+In week 2 Lab, we looked at the posterior distribution for the parameters of a normal distribution assuming Jeffreys' priors. For this example, determine
+
+```{=tex}
+$$\mbox{i)}\; \mbox{Var}(\mu|\mathbf{y}),\quad \mbox{ii)}\; E(\mbox{Var}(\mu|\mathbf{y})), \quad \mbox{iii)}\; \mbox{Var}(E(\mu|\mathbf{y})),\quad \mbox{with}\; \mathbf{y}=(y_1,\cdots, y_n)^{\scriptscriptstyle \top}$$
+and using the law of total variance, deduce what this implies about $\mbox{Var}(\mu)$.
+```
+\textsf{Hint}: If $z$ is drawn from a student-$t$ distribution with $\nu$ degrees of freedom, then $E(z) = 0$ and $\mbox{Var}(z) = \frac{\nu}{\nu-2}$.
+
+# Answer:
+```{=tex}
+In week 2 lab, we showed that the posterior of $\mu$ is $t$ with $n-1$ degrees of freedom, location parameter $\bar{y}$ and
+scale parameter $s^2/n$. This can be converted to a standard student $t$ by writing 
+$\displaystyle z =\frac{\mu-\bar{y}}{\sqrt{s^2/n}}$.
+
+Hence $\displaystyle \mbox{Var}(\mu|\mathbf{y})=\frac{s^2}{n}\times\frac{n-1}{n-3}=\frac{(n-1)s^2}{n(n-3)}$ and 
+$\displaystyle E(\mbox{Var}(\mu|\mathbf{y}))=\frac{(n-1)E(s^2)}{n(n-3)}=\frac{(n-1)\sigma^2}{n(n-3)}$.
+
+Also $\displaystyle \mbox{Var}(E(\mu|\mathbf{y}))=\mbox{Var}(\bar{y})=\frac{\sigma^2}{n}$.
+This implies that
+$$\mbox{Var}(\mu)=\frac{(n-1)\sigma^2}{n(n-3)}+\frac{\sigma^2}{n}=\frac{\sigma^2}{n}\left(\frac{n-1}{n-3}+1\right)=\frac{\sigma^2}{n}\left(2+\frac{2}{n-3}\right)$$
+is a function of $n$. This highlights that the prior is improper and does not have a defined variance.
+```
+

@@ -1,0 +1,194 @@
+---
+title: "Lecture 24 Rscript"
+header-includes:
+- \usepackage{bm}
+- \usepackage{amsmath}
+output:
+  pdf_document:
+    number_sections: no
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+set.seed(3478575)
+```
+
+
+# Attempting Bayesian inference for a Gaussian process.
+
+\subsection*{Noisy observations, single realisation from a Gaussian process prior.}
+
+In this example, we will assume the following,
+
+\begin{eqnarray}
+p({\bf y} | \bm \mu({\bf x})) &=& \mathcal{N}(\bm \mu({\bf x}), \sigma^2{\bf I}) \nonumber \\
+		 p(\bm \mu({\bf x})) &=& \mathcal{N}(\bm m({\bf x}), \bm k({\bf x},{\bf x})), \nonumber 
+		\end{eqnarray}
+
+where $\bm m({\bf x}) = 0$, $\bm k({x}_i,{x}_j) = \sigma^2_Ke^{-\beta\sin^2(\pi(x_i-x_j)/12)}$. The parameters we want to make inference on are:
+
+\begin{itemize}
+\item $\bm \mu(\tilde{x})$, where $\tilde{\bf x}$ may include points where we observe $\bf y$.
+\item $\sigma^2$. From the lecture slides, we can do this using a Gibbs step.
+\item $\sigma^2_K$. From the lecture slides, we can do this using a Gibbs step.
+\item $\beta$. This will require a Metropolis-Hastings or HMC step.
+\end{itemize}
+
+\paragraph{Simulating data}
+
+```{r}
+t<-1:23*0.5 #Set of points where function is evaluated
+#Values for parameters.
+beta <- 2.1
+sigma2<-2.1
+sigma2k<-1.3
+
+#constructing k.
+n<-length(t)
+tmat<-matrix(t,n,n)
+tdiff<-tmat-t(tmat)
+k<- sigma2k*exp(-beta*sin(pi*tdiff/12)^2)
+
+#simulating mu
+library(mvtnorm)
+mu.t <- rmvnorm(1,mean=rep(0,n),sigma=k)
+
+#simulating y
+y    <- mu.t + rnorm(n)*sqrt(sigma2)
+y    <-as.numeric(y)
+```
+
+\paragraph{Estimating parameters}
+
+For this, we will assume a flat prior for $\beta$, and vague gamma(0,0) priors
+for $\tau = (\sigma^2)^{-1}$ and  $\tau_K = (\sigma^2_K)^{-1}$.
+
+```{r}
+#Arguments
+#y, vector of responses
+#t, time points where responses were observed.
+#tpred, time points where predictions of \mu(x) are wanted.
+#tau0, initial value for precision.
+#sigma_K: initial value for parameter controlling scale of $k(t,t)$.
+#beta: parameter controlling decay in periodic function.
+#Iter: number of iterations
+#burnin: number of initial iterations to remove
+Gibbs.Gp<-function(y,t,tpred,tau0,sigma_K,beta,iter,burnin){
+  n <- length(y)      #number of points
+  t.all <-c(t,tpred)
+  p <-length(tpred)
+  mT<-matrix(t.all,n+p,n+p)
+  #Note from properties of exponential function, the following never changes
+  Kc<- exp(-sin(pi*(mT-t(mT))/12)^2)
+  Kall<-Kc^beta
+  
+  tau    <-tau0           
+  library(mvtnorm)  
+    
+
+    
+  par<-matrix(0,iter,n+p+4)  
+   #storing iterations, mu (length p) + sigma, sigma_K, beta and acceptance indicator (length 4)
+  for( i in 1:iter){
+    #Updating mu for both t and t outside.
+    p1   <-Kall[1:n,1:n]*sigma_K^2+diag(n)/tau
+    pinv <-solve(p1)
+    pred.mean<-sigma_K^2*Kall[,1:n]%*%pinv%*%y
+    pred.var <-Kall*sigma_K^2 - Kall[,1:n]%*%pinv%*%Kall[1:n,]*sigma_K^4
+    mu <- rmvnorm(1,mean=pred.mean,sigma=pred.var) #sample mu(x)
+    mu <- as.numeric(mu)
+    
+    #updating sigma
+    err  <- y-mu[1:n]           #errors for mu where values were observed.
+    tau  <- rgamma(1,0.5*n,0.5*sum(err^2))     #sample tau.
+    
+    #updating sigma_K  
+    Kinvo<-solve(Kall[1:n,1:n]) #constructing inverse needed to update sigma_K, 
+    #note this assume all points where t was observed were listed first.
+    muKmuinv <- t(mu[1:n])%*%Kinvo%*%mu[1:n]
+    tauK<- rgamma(1,0.5*n,0.5*muKmuinv)
+    sigma_K<-1/sqrt(tauK)
+    
+    #Updating beta.
+    beta.cand <-runif(1,1.5,2.5)
+    r1        <-dmvnorm(mu[1:n],mean=rep(0,n),sigma=sigma_K^2*Kc[1:n,1:n]^beta.cand,log=TRUE)
+    r2        <-dmvnorm(mu[1:n],mean=rep(0,n),sigma=sigma_K^2*Kc[1:n,1:n]^beta,log=TRUE)
+    r         <-r1-r2 #log of ratio. 
+    ind       <-rbinom(1,1,exp(min(c(r,0))))
+    beta      <-ind*beta.cand + (1-ind)*beta
+    
+    #Update k
+    Kall<-Kc^beta
+    
+    par[i,] <-c(mu,1/sqrt(tau),sigma_K,beta,ind)  #store current round of mu, sigma in par.
+  }
+  
+  par <-par[-c(1:burnin),]      #removing the first iterations
+  colnames(par)<-c(paste('mu',c(t,tpred),sep=''),'sigma','sigma_K','beta','accept')
+  return(par)  
+}
+
+system.time(chain1<-Gibbs.Gp(y=y,t=t,tpred=12:23,tau0=1,sigma_K=0.33,beta=1.5,
+          iter=10000,burnin=2000))
+system.time(chain2<-Gibbs.Gp(y=y,t=t,tpred=12:23,tau0=5,sigma_K=0.75,beta=2,
+          iter=10000,burnin=2000))
+system.time(chain3<-Gibbs.Gp(y=y,t=t,tpred=12:23,tau0=0.2,sigma_K=1.5,beta=2.5,
+          iter=10000,burnin=2000))
+
+
+library(coda)
+#Estimating Gelman -Rubin diagnostics. Remove last column because it is acceptance indictor
+dim2<-dim(chain1)[2]
+#Note 8000 iterations were retained, so 50:50 split is iteration 1:4000 and iteration 4001:8000
+
+
+#However first we must convert the output into mcmc lists for coda to interpret.
+ml1<-as.mcmc.list(as.mcmc((chain1[1:4000,-dim2])))
+ml2<-as.mcmc.list(as.mcmc((chain2[1:4000,-dim2])))
+ml3<-as.mcmc.list(as.mcmc((chain3[1:4000,-dim2])))
+ml4<-as.mcmc.list(as.mcmc((chain1[4000+1:4000,-dim2])))
+ml5<-as.mcmc.list(as.mcmc((chain2[4000+1:4000,-dim2])))
+ml6<-as.mcmc.list(as.mcmc((chain3[4000+1:4000,-dim2])))
+estml<-c(ml1,ml2,ml3,ml4,ml5,ml6)
+
+#Gelman-Rubin diagnostic.
+gelman.diag(estml)[[1]]
+
+#effective sample size.
+effectiveSize(estml)
+
+#proportion accepted.
+sum(chain1[,dim2])/8000
+sum(chain2[,dim2])/8000
+sum(chain3[,dim2])/8000
+
+
+#plot predictions with 99 \% credible interval for data.
+
+chain.all<-cbind(chain1,chain2,chain3)
+LL       <-apply(chain.all,2,FUN= function(x) quantile(x,0.005))
+post.mean<-colMeans(chain.all)
+UL       <-apply(chain.all,2,FUN= function(x) quantile(x,0.995))
+
+ylims=c(min(c(LL,y))-0.05,max(c(UL,y))+0.05 )
+plot(c(t,12:23),post.mean[1:(length(t)+12)],type='l',ylim=ylims,xlab='t',
+     ylab=expression(paste( mu,'(t)',sep='') ), main='Estimates from Gaussian process model')
+lines(c(t,12:23),LL[1:(length(t)+12)],col=2,lty=2)
+lines(c(t,12:23),UL[1:(length(t)+12)],col=2,lty=2)
+points(t,y,pch=19)
+points(t,mu.t,pch=19,col=2)
+legend('topright',c('y','True mu'),pch=19,col=1:2,bty='n')
+
+#Estimates of sigma, sigma_K,beta
+par(mfrow=c(2,2))
+plot(density(chain.all[,36]),xlab=expression(sigma),ylab='density',main='Empirical posterior')
+abline(v=sqrt(sigma2),col=2)
+plot(density(chain.all[,37]),xlab=expression(sigma[K]),ylab='density',main='Empirical posterior')
+abline(v=sqrt(sigma2k),col=2)
+plot(density(chain.all[,38]),xlab=expression(beta),ylab='density',main='Empirical posterior')
+abline(v=beta,col=2)
+```
+
+
+
