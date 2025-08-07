@@ -1,0 +1,254 @@
+---
+title: "`r fname <- gsub('_', ' ', tools::file_path_sans_ext(basename(knitr::current_input()))); paste0(toupper(substr(fname, 1, 1)), substr(fname, 2, nchar(fname)))`"
+author: "Josh Copeland (SID: 1444772)"
+output: html_document
+date: "`r Sys.Date()`"
+---
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+library(lubridate)
+library(janitor)
+library(forecast)
+
+theme_set(theme_minimal())
+
+```
+
+```{r setup_comment, include=TRUE}
+
+#Packages used:
+
+# library(tidyverse)
+# library(lubridate)
+# library(janitor)
+# library(forecast)
+
+```
+
+# Q1 
+
+### a) Read in the data, aggregate it to a quarterly frequency and create a time dummy.
+
+```{r q1a}
+
+# Reading in data and aggregating into quarterly format
+
+data <- read_csv("retailsales.csv") %>% 
+  clean_names() %>% 
+  select(date, y = total) %>%
+  
+  mutate(
+    
+    date = my(date),
+    year = year(date),
+    quarter = quarter(date),
+    year_quarter = paste0(year,"Q",quarter),
+    quarter_end_date = case_when(
+      quarter == 1 ~ make_date(year, 3, 1),
+      quarter == 2 ~ make_date(year, 6, 1),
+      quarter == 3 ~ make_date(year, 9, 1),
+      quarter == 4 ~ make_date(year, 12, 1))
+  ) %>% 
+  
+  group_by(quarter_end_date) %>% 
+  summarise(y = sum(y, na.rm = TRUE)) %>% 
+  select(date = quarter_end_date, y) %>% 
+
+# Creating log series
+
+  mutate(y_log = log(y)) %>% 
+
+# Filter for estimation period
+
+  filter(date >= as.Date("2000-03-01") & date <= as.Date("2018-12-01")) %>% 
+
+# Creating a time trend dummy
+
+  mutate(time = row_number() * 0.25)
+
+head(data)
+
+```
+
+### b) Estimate a linear regression of Y on time and interpret its coefficients.
+
+```{r q1b}
+
+
+
+eq <- lm(y_log~time, data = data)
+
+# In this example, the intercept has no useful interpretation. However, the Beta_1 coefficient indicates that on average, the level of retail says increases by around 4.6 per cent each year.
+
+summary(eq)
+
+
+```
+
+
+### c) Create a time series plot of Y with the fitted regression in the same axes.
+
+
+```{r q1c}
+
+data <- data %>% 
+  mutate(time_prediction = predict(eq, newdata = data))
+
+ggplot(data, aes(x = date)) +
+  geom_line(aes(y = y_log), color = "blue", size = 1) +
+  geom_line(aes(y = time_prediction), color = "red", size = 1, linetype = "dashed") +
+  labs(title = "Retail sales", y = "log(Retail sales)", x = "Date")
+
+```
+
+### d) Use the linear regresison to forecast the value of Y for the four quarters of 2019
+
+
+``` {r q1d}
+
+forecasts <- data.frame(time = seq(from = as.numeric(tail(data$time, 1)) + 0.25, by = 0.25, length.out = 4))
+
+forecasts <- forecasts %>% 
+  mutate(forecasts = predict(eq, newdata = forecasts)) %>% 
+  mutate(date = seq.Date(from = as.Date("2019-03-01"),
+                         to = as.Date("2019-12-01"),
+                         by = "3 months"))
+
+
+
+                        
+```
+
+### e) Obtain the residuals of the linear regression in (b) and the forecast errors of the forecasts in (d). Plot these against time and comments on any pattern(s) you observe.
+
+``` {r q1e}
+
+# Producing forecast errors
+
+data_2019 <- read_csv("retailsales.csv") %>% 
+  clean_names() %>% 
+  select(date, y = total) %>%
+  
+  mutate(
+    
+    date = my(date),
+    year = year(date),
+    quarter = quarter(date),
+    year_quarter = paste0(year,"Q",quarter),
+    quarter_end_date = case_when(
+      quarter == 1 ~ make_date(year, 3, 1),
+      quarter == 2 ~ make_date(year, 6, 1),
+      quarter == 3 ~ make_date(year, 9, 1),
+      quarter == 4 ~ make_date(year, 12, 1))
+  ) %>% 
+  
+  group_by(quarter_end_date) %>% 
+  summarise(y = sum(y, na.rm = TRUE)) %>% 
+  select(date = quarter_end_date, y) %>% 
+
+  # Creating log series
+
+  mutate(y_log = log(y)) %>% 
+  
+  filter(date >= as.Date("2019-03-01") & date <= as.Date("2019-12-01")) %>% 
+  
+  # Append forecast values
+  
+  inner_join(forecasts, by = "date") %>% 
+  
+  # Produce forecast errors
+
+  mutate(forecast_errors = y_log - forecasts)
+
+
+
+# Producing model residuals
+
+data_comparison <- data %>% 
+  mutate(residuals = eq$resid) %>% 
+  full_join(data_2019, by = "date") %>% 
+  select(date, residuals, forecast_errors)
+
+
+# There is a very obvious seasonal component to this chart which we have not accounted for!
+
+ggplot(data_comparison, aes(x = date)) + 
+  geom_line(aes(y = residuals), color = "blue", size = 1) +
+  geom_line(aes(y = forecast_errors), color = "red", size = 1)
+
+```
+
+# Q2
+
+### a) Create a factor variable containing the seasons (quarters) of each observation.
+
+
+```{r q2a }
+
+# Create a quarterly dummy
+
+data <- data %>% 
+  mutate(season = quarter(date)) %>% 
+    mutate(
+    Q1 = as.integer(quarter(date) == 1),
+    Q2 = as.integer(quarter(date) == 2),
+    Q3 = as.integer(quarter(date) == 3),
+    Q4 = as.integer(quarter(date) == 4)
+  )
+
+
+
+```
+
+### b) Estimate regression model 2 accounting for both a time trend and seasonal issues.
+
+```{r q2b}
+
+eq2 <- lm(y_log ~ time + Q2 + Q3 + Q4, data = data)
+
+print(eq2)
+
+```
+
+### c) Obtain forecasts from regresison model 2 for the four quarters of 2019.
+
+``` {r q2c}
+
+
+data_2019 <- data_2019 %>% 
+  mutate(season = quarter(date)) %>% 
+    mutate(
+    Q1 = as.integer(quarter(date) == 1),
+    Q2 = as.integer(quarter(date) == 2),
+    Q3 = as.integer(quarter(date) == 3),
+    Q4 = as.integer(quarter(date) == 4)
+  ) 
+
+data_2019 <- data_2019 %>% 
+  mutate(fcst = predict(eq2, newdata = data_2019)) %>% 
+  mutate(fcst_errors = y_log - fcst)
+
+
+```
+
+
+### d) Obtain the residuals from (b) and the forecast errors in (c). Plot them against tim and compare with the same plot in 1(e) above.
+
+```{r q2d}
+
+data_comparison_2 <- data %>% 
+  mutate(residuals = eq2$residuals) %>% 
+  full_join(data_2019) %>% 
+  select(date, residuals, fcst_errors)
+
+ggplot(data_comparison_2, aes(x = date)) + 
+  geom_line(aes(y = residuals), color = "blue", size = 1) +
+  geom_line(aes(y = fcst_errors), color = "red", size = 1)
+
+
+```
+
+
+
