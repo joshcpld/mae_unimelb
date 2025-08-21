@@ -1,0 +1,359 @@
+---
+title: "ECOM90004 Assignment 1"
+output: html_document
+author: "Josh Copeland (SID: 1444772)"
+date: "`r Sys.Date()`"
+---
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+library(lubridate)
+library(janitor)
+library(forecast)
+
+theme_set(theme_minimal())
+
+```
+
+```{r setup_comment, include=TRUE}
+
+#Packages used:
+
+# library(tidyverse)
+# library(lubridate)
+# library(janitor)
+# library(forecast)
+
+```
+
+# Question 1 
+
+\n 
+
+Before Answering questions I first develop all the required dummy variables and other regressors.
+
+```{r q1_setup}
+
+data <- read_csv('retailsales.csv') %>% 
+  clean_names() %>% 
+  select(date, value = total) %>% 
+  
+  # Aggregating to quarterly data
+  
+  mutate(
+    
+    date = my(date),
+    year = year(date),
+    quarter = quarter(date),
+    year_quarter = paste0(year,"Q",quarter),
+    quarter_end_date = case_when(
+      quarter == 1 ~ make_date(year, 3, 1),
+      quarter == 2 ~ make_date(year, 6, 1),
+      quarter == 3 ~ make_date(year, 9, 1),
+      quarter == 4 ~ make_date(year, 12, 1))
+  ) %>% 
+  
+  group_by(quarter_end_date) %>% 
+  summarise(value = sum(value, na.rm = TRUE)) %>% 
+  select(date = quarter_end_date, value) %>% 
+  
+  # Producing time dummy
+  
+  mutate(time = row_number() * 0.25) %>% 
+  
+  # Producing seasonal dummies
+  
+  mutate(season = quarter(date)) %>% 
+    
+  mutate(
+    Q1 = as.integer(quarter(date) == 1),
+    Q2 = as.integer(quarter(date) == 2),
+    Q3 = as.integer(quarter(date) == 3),
+    Q4 = as.integer(quarter(date) == 4)
+  ) %>% 
+  
+  # Creating time post GFC dummy variables
+
+  mutate(
+  
+    time_post_2007q4 = if_else(date > as.Date("2007-12-01"), time - time[date == as.Date("2007-12-01")], 0),
+    time_post_2008q1 = if_else(date > as.Date("2008-03-01"), time - time[date == as.Date("2008-03-01")], 0),
+    time_post_2008q2 = if_else(date > as.Date("2008-06-01"), time - time[date == as.Date("2008-06-01")], 0),
+    time_post_2008q3 = if_else(date > as.Date("2008-09-01"), time - time[date == as.Date("2008-09-01")], 0),
+    time_post_2008q4 = if_else(date > as.Date("2008-12-01"), time - time[date == as.Date("2008-12-01")], 0),
+    time_post_2009q1 = if_else(date > as.Date("2009-03-01"), time - time[date == as.Date("2009-03-01")], 0),
+    time_post_2009q2 = if_else(date > as.Date("2009-06-01"), time - time[date == as.Date("2009-06-01")], 0)
+
+    ) %>% 
+  
+  # Selecting final variables
+  
+  mutate(value_log = log(value)) %>% 
+  
+  select(date, 
+         value = value_log, 
+         time, 
+         starts_with("time_post_"),
+         starts_with("Q") )
+
+
+# Producing object containg the explicit estimation period
+
+data_est <- data %>% 
+  filter(date >= as.Date("2000-03-01") & date <= as.Date("2018-12-01"))
+
+
+```
+
+\n
+
+### a) Set up R code that will, for each of the 7 possible GFC break dates, use the AICc to select the AR order p. Also include code to check whether in each case the residuals of the chosen model show evidence of autocorrelation.
+
+\n
+
+For each value of τ we are generating 8 different models which all share the same time and seasonal dummies. These 8 different models all have an increasing number of lags in the error terms. We are judging which one is best by selecting the model with the lowest aicc for each value of tau.
+
+\n
+
+``` {r q1a}
+
+# Step 1: collect all the break dummies
+
+break_vars <- data_est %>%
+  select(starts_with("time_post_")) %>%
+  names()
+
+# Step 2: for a given break dummy, fit AR order p
+
+fit_model <- function(break_var, p, data_est) {
+
+  xreg <- data_est %>%
+    select(time, all_of(break_var), Q1, Q2, Q3) %>%
+    as.matrix()
+
+  fit <- forecast::Arima(
+    y = data_est$value,
+    xreg = xreg,
+    order = c(p, 0, 0),
+    include.mean = TRUE
+  )
+
+  tibble(
+    break_var = break_var,
+    p         = p,
+    aicc      = fit$aicc,
+    model     = list(fit)
+  )
+}
+
+# Step 3: run across all break dummies and AR(p) where p=[0,8]
+
+results <- expand_grid(break_var = break_vars, p = 0:8) %>%
+  mutate(fit = map2(break_var, p, ~ fit_model(.x, .y, data_est))) %>%
+  { purrr::list_rbind(.$fit) } 
+
+# Step 4: Select best AR order per break dummy by AICc
+
+best_per_break <- results %>%
+  group_by(break_var) %>%
+  slice_min(aicc, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
+  mutate(
+    lb_test   = map(model, ~ Box.test(residuals(.x), lag = 12, type = "Ljung-Box")),
+    lb_pvalue = map_dbl(lb_test, ~ .x$p.value)
+  ) %>%
+  select(break_var, p, aicc, lb_pvalue) 
+
+print(best_per_break)
+
+```
+
+\n
+
+### b) then set up coed to further use the AICc to selected the preferred value for the GFC break date τ
+
+\n
+
+Doing this is simple as we simply need to select the break_var from the best_per_break object defined in Q1A which has the lowest AICc. To be a reasonable choice, it's Ljung-Box p-value (lb_pvalue) must also be greater than 0.05 such that we cannot reject the null hypothesis of residuals being uncorrelated.
+
+According to these criterion, 2007q4 is the candidate option for the GFC break date.
+
+```{r q1b}
+
+overall_best <- best_per_break %>%
+  slice_min(aicc, n = 1, with_ties = FALSE)
+
+print(overall_best)
+
+
+```
+
+\n
+
+### c) Further develop this code with an extra loop to implement a recursive regression approach to extend the end of the estimation sample to each of 2019q1, 2019q2, 2019q3 respectively (with the same start of the estimation period).
+
+``` {r q1c}
+
+start_date <- as.Date("2000-03-01") 
+end_dates  <- as.Date(c("2019-03-01", "2019-06-01", "2019-09-01"))  
+
+# Step 1: collect all break dummies
+all_break_vars <- data_est %>%
+  select(starts_with("time_post_")) %>%
+  names()
+
+# Step 2: for a given break dummy on a given sample range, fit AR(p)
+
+fit_one <- function(data_sub, break_var, p) {
+  xreg <- data_sub %>%
+    select(time, all_of(break_var), Q1, Q2, Q3) %>%
+    as.matrix()
+
+  fit <- forecast::Arima(
+    y = as.numeric(data_sub$value),
+    xreg = xreg,
+    order = c(p, 0, 0),
+    include.mean = TRUE
+  )
+
+  tibble(
+    aicc  = fit$aicc,
+    model = list(fit)
+  )
+}
+
+
+# Step 3: for for one end date pick best p by AICc for each break dummy
+run_for_end_date <- function(end_date) {
+  data_sub <- data_est %>% filter(date >= start_date, date <= end_date)
+  stopifnot(nrow(data_sub) > 10)
+
+  res <- expand_grid(break_var = all_break_vars, p = 0:8) %>%
+    mutate(fit_tbl = map2(break_var, p, ~ fit_one(data_sub, .x, .y))) %>%
+    unnest(fit_tbl) 
+
+  best_per_break <- res %>%
+    group_by(break_var) %>%
+    slice_min(aicc, n = 1, with_ties = FALSE) %>%
+    ungroup() %>%
+    mutate(
+      lb_pvalue = map_dbl(model, ~ Box.test(residuals(.x), lag = 12, type = "Ljung-Box")$p.value),
+      end_date  = end_date
+    ) %>%
+    select(end_date, break_var, chosen_p = p, aicc, lb_pvalue)
+
+  best_per_break
+}
+
+# Step 3: run recursively for increasing estimation window
+
+best_per_break_by_end <- map_dfr(end_dates, run_for_end_date) %>%
+  mutate(
+    break_label = break_var |>
+      str_remove("^time_post_") |>
+      str_replace("q", " Q") |>
+      toupper()
+  ) %>%
+  select(end_date, break_label, chosen_p, aicc, lb_pvalue) %>%
+  arrange(end_date, aicc)
+
+# Step 4: view results best AR(p) error models across different end dates and dummies
+
+print(best_per_break_by_end)
+
+
+# Selecting the preferred dummies across each estimation window
+
+preferred_break_per_end <- best_per_break_by_end %>%
+  group_by(end_date) %>%
+  slice_min(aicc, n = 1, with_ties = FALSE) %>%
+  ungroup()
+
+print(preferred_break_per_end)
+
+```
+
+
+# Question 2
+
+For each of the four estimation samples (end date range of 2018Q4 to 2019Q3) and each of the seven possible GFC break dates, use the AICc-selected AR model to calculate one-step-ahead forecasts and forecast errors for log retail sales.
+
+For each possible GFC break date, calculate the RMSE of the one-step-ahead forecasts across the four estimates samples (i.e. for each possible GFC break date the Root Mean Squared Error is taken across the four one-step ahead forecast errors calculated from the four recursive estimation samples).
+
+```{r q2}
+
+
+end_dates  <- as.Date(c("2018-12-01", "2019-03-01", "2019-06-01", "2019-09-01"))
+p_fixed    <- 3
+
+# Break dummies
+break_vars <- data %>% select(starts_with("time_post_")) %>% names()
+
+# Function to produce one step ahead forecasts for each break date and forecast end date
+
+forecast_one_step <- function(end_date, break_var) {
+  train <- data %>% filter(date >= start_date, date <= end_date)
+
+  xreg_train <- train %>%
+    select(time, all_of(break_var), Q1, Q2, Q3) %>%
+    as.matrix()
+
+  fit <- forecast::Arima(
+    y = as.numeric(train$value),
+    xreg = xreg_train,
+    order = c(p_fixed, 0, 0),
+    include.mean = TRUE
+  )
+
+  next_date <- data %>% filter(date > end_date) %>%
+    summarise(nd = min(date)) %>% pull(nd)
+
+  newxreg <- data %>%
+    filter(date == next_date) %>%
+    select(time, all_of(break_var), Q1, Q2, Q3) %>%
+    as.matrix()
+
+  yhat <- as.numeric(forecast::forecast(fit, h = 1, xreg = newxreg)$mean[1])
+
+  tibble(forecast_date = next_date, yhat = yhat)
+}
+
+# One-step forecasts table
+one_step_fc <- expand_grid(end_date = end_dates, break_var = break_vars) %>%
+  mutate(res = map2(end_date, break_var, forecast_one_step)) %>%
+  unnest(res) %>%  # no duplicate names now
+  mutate(
+    break_label = break_var %>%
+      str_remove("^time_post_") %>%
+      str_replace("q", " Q") %>%
+      toupper()
+  ) %>%
+  select(end_date, forecast_date, break_label, forecast = yhat) %>%
+  arrange(end_date, break_label)
+
+one_step_fc
+
+
+# Producing RMSEs
+
+rmses <- one_step_fc %>% 
+  inner_join(
+    data %>% transmute(forecast_date = date, actual = value),
+    by = "forecast_date"
+  ) %>% 
+  group_by(break_label) %>%
+  summarise(
+    rmse = sqrt(mean((actual - forecast)^2, na.rm = TRUE)),
+    .groups = "drop"
+  ) %>%
+  arrange(rmse)
+
+print(rmses)
+
+```
+
+
+
+
+
