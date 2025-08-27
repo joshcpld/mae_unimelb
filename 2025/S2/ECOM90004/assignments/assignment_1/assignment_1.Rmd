@@ -260,8 +260,7 @@ best_per_break_by_end <- map_dfr(end_dates, run_for_end_date) %>%
 
 # Step 4: view results best AR(p) error models across different end dates and dummies
 
-print(best_per_break_by_end)
-
+print(best_per_break_by_end, n = Inf)
 
 # Selecting the preferred dummies across each estimation window
 
@@ -269,6 +268,7 @@ preferred_break_per_end <- best_per_break_by_end %>%
   group_by(end_date) %>%
   slice_min(aicc, n = 1, with_ties = FALSE) %>%
   ungroup()
+  
 
 print(preferred_break_per_end)
 

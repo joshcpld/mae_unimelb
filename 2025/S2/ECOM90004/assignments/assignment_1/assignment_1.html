@@ -11,7 +11,7 @@
 
 <meta name="author" content="Josh Copeland (SID: 1444772)" />
 
-<meta name="date" content="2025-08-21" />
+<meta name="date" content="2025-08-22" />
 
 <title>ECOM90004 Assignment 1</title>
 
@@ -352,7 +352,7 @@ display: none;
 
 <h1 class="title toc-ignore">ECOM90004 Assignment 1</h1>
 <h4 class="author">Josh Copeland (SID: 1444772)</h4>
-<h4 class="date">2025-08-21</h4>
+<h4 class="date">2025-08-22</h4>
 
 </div>
 
@@ -537,7 +537,7 @@ the estimation period).</h3>
 end_dates  &lt;- as.Date(c(&quot;2019-03-01&quot;, &quot;2019-06-01&quot;, &quot;2019-09-01&quot;))  
 
 # Step 1: collect all break dummies
-all_break_vars &lt;- data %&gt;%
+all_break_vars &lt;- data_est %&gt;%
   select(starts_with(&quot;time_post_&quot;)) %&gt;%
   names()
 
@@ -564,7 +564,7 @@ fit_one &lt;- function(data_sub, break_var, p) {
 
 # Step 3: for for one end date pick best p by AICc for each break dummy
 run_for_end_date &lt;- function(end_date) {
-  data_sub &lt;- data %&gt;% filter(date &gt;= start_date, date &lt;= end_date)
+  data_sub &lt;- data_est %&gt;% filter(date &gt;= start_date, date &lt;= end_date)
   stopifnot(nrow(data_sub) &gt; 10)
 
   res &lt;- expand_grid(break_var = all_break_vars, p = 0:8) %&gt;%
@@ -598,40 +598,51 @@ best_per_break_by_end &lt;- map_dfr(end_dates, run_for_end_date) %&gt;%
 
 # Step 4: view results best AR(p) error models across different end dates and dummies
 
-print(best_per_break_by_end)</code></pre>
+print(best_per_break_by_end, n = Inf)</code></pre>
 <pre><code>## # A tibble: 21 × 5
 ##    end_date   break_label chosen_p  aicc lb_pvalue
 ##    &lt;date&gt;     &lt;chr&gt;          &lt;int&gt; &lt;dbl&gt;     &lt;dbl&gt;
-##  1 2019-03-01 2007 Q4            3 -485.     0.698
-##  2 2019-03-01 2008 Q1            3 -484.     0.857
-##  3 2019-03-01 2009 Q2            3 -482.     0.795
-##  4 2019-03-01 2009 Q1            3 -482.     0.900
-##  5 2019-03-01 2008 Q2            3 -482.     0.857
-##  6 2019-03-01 2008 Q4            3 -481.     0.914
-##  7 2019-03-01 2008 Q3            3 -481.     0.834
-##  8 2019-06-01 2007 Q4            3 -493.     0.703
-##  9 2019-06-01 2008 Q1            3 -492.     0.857
-## 10 2019-06-01 2009 Q2            3 -490.     0.788
-## # ℹ 11 more rows</code></pre>
+##  1 2019-03-01 2007 Q4            3 -478.     0.709
+##  2 2019-03-01 2008 Q1            3 -477.     0.863
+##  3 2019-03-01 2009 Q2            3 -475.     0.799
+##  4 2019-03-01 2009 Q1            3 -474.     0.902
+##  5 2019-03-01 2008 Q2            3 -474.     0.863
+##  6 2019-03-01 2008 Q4            3 -473.     0.918
+##  7 2019-03-01 2008 Q3            3 -473.     0.841
+##  8 2019-06-01 2007 Q4            3 -478.     0.709
+##  9 2019-06-01 2008 Q1            3 -477.     0.863
+## 10 2019-06-01 2009 Q2            3 -475.     0.799
+## 11 2019-06-01 2009 Q1            3 -474.     0.902
+## 12 2019-06-01 2008 Q2            3 -474.     0.863
+## 13 2019-06-01 2008 Q4            3 -473.     0.918
+## 14 2019-06-01 2008 Q3            3 -473.     0.841
+## 15 2019-09-01 2007 Q4            3 -478.     0.709
+## 16 2019-09-01 2008 Q1            3 -477.     0.863
+## 17 2019-09-01 2009 Q2            3 -475.     0.799
+## 18 2019-09-01 2009 Q1            3 -474.     0.902
+## 19 2019-09-01 2008 Q2            3 -474.     0.863
+## 20 2019-09-01 2008 Q4            3 -473.     0.918
+## 21 2019-09-01 2008 Q3            3 -473.     0.841</code></pre>
 <pre class="r"><code># Selecting the preferred dummies across each estimation window
 
 preferred_break_per_end &lt;- best_per_break_by_end %&gt;%
   group_by(end_date) %&gt;%
   slice_min(aicc, n = 1, with_ties = FALSE) %&gt;%
   ungroup()
+  
 
 print(preferred_break_per_end)</code></pre>
 <pre><code>## # A tibble: 3 × 5
 ##   end_date   break_label chosen_p  aicc lb_pvalue
 ##   &lt;date&gt;     &lt;chr&gt;          &lt;int&gt; &lt;dbl&gt;     &lt;dbl&gt;
-## 1 2019-03-01 2007 Q4            3 -485.     0.698
-## 2 2019-06-01 2007 Q4            3 -493.     0.703
-## 3 2019-09-01 2007 Q4            3 -500.     0.705</code></pre>
+## 1 2019-03-01 2007 Q4            3 -478.     0.709
+## 2 2019-06-01 2007 Q4            3 -478.     0.709
+## 3 2019-09-01 2007 Q4            3 -478.     0.709</code></pre>
 </div>
 </div>
 <div id="question-2" class="section level1">
 <h1>Question 2</h1>
-<p>For each of the foure estimation samples (end date range of 2018Q4 to
+<p>For each of the four estimation samples (end date range of 2018Q4 to
 2019Q3) and each of the seven possible GFC break dates, use the
 AICc-selected AR model to calculate one-step-ahead forecasts and
 forecast errors for log retail sales.</p>
@@ -640,6 +651,94 @@ one-step-ahead forecasts across the four estimates samples (i.e. for
 each possible GFC break date the Root Mean Squared Error is taken across
 the four one-step ahead forecast errors calculated from the four
 recursive estimation samples).</p>
+<pre class="r"><code>end_dates  &lt;- as.Date(c(&quot;2018-12-01&quot;, &quot;2019-03-01&quot;, &quot;2019-06-01&quot;, &quot;2019-09-01&quot;))
+p_fixed    &lt;- 3
+
+# Break dummies
+break_vars &lt;- data %&gt;% select(starts_with(&quot;time_post_&quot;)) %&gt;% names()
+
+# Function to produce one step ahead forecasts for each break date and forecast end date
+
+forecast_one_step &lt;- function(end_date, break_var) {
+  train &lt;- data %&gt;% filter(date &gt;= start_date, date &lt;= end_date)
+
+  xreg_train &lt;- train %&gt;%
+    select(time, all_of(break_var), Q1, Q2, Q3) %&gt;%
+    as.matrix()
+
+  fit &lt;- forecast::Arima(
+    y = as.numeric(train$value),
+    xreg = xreg_train,
+    order = c(p_fixed, 0, 0),
+    include.mean = TRUE
+  )
+
+  next_date &lt;- data %&gt;% filter(date &gt; end_date) %&gt;%
+    summarise(nd = min(date)) %&gt;% pull(nd)
+
+  newxreg &lt;- data %&gt;%
+    filter(date == next_date) %&gt;%
+    select(time, all_of(break_var), Q1, Q2, Q3) %&gt;%
+    as.matrix()
+
+  yhat &lt;- as.numeric(forecast::forecast(fit, h = 1, xreg = newxreg)$mean[1])
+
+  tibble(forecast_date = next_date, yhat = yhat)
+}
+
+# One-step forecasts table
+one_step_fc &lt;- expand_grid(end_date = end_dates, break_var = break_vars) %&gt;%
+  mutate(res = map2(end_date, break_var, forecast_one_step)) %&gt;%
+  unnest(res) %&gt;%  # no duplicate names now
+  mutate(
+    break_label = break_var %&gt;%
+      str_remove(&quot;^time_post_&quot;) %&gt;%
+      str_replace(&quot;q&quot;, &quot; Q&quot;) %&gt;%
+      toupper()
+  ) %&gt;%
+  select(end_date, forecast_date, break_label, forecast = yhat) %&gt;%
+  arrange(end_date, break_label)
+
+one_step_fc</code></pre>
+<pre><code>## # A tibble: 28 × 4
+##    end_date   forecast_date break_label forecast
+##    &lt;date&gt;     &lt;date&gt;        &lt;chr&gt;          &lt;dbl&gt;
+##  1 2018-12-01 2019-03-01    2007 Q4         11.3
+##  2 2018-12-01 2019-03-01    2008 Q1         11.3
+##  3 2018-12-01 2019-03-01    2008 Q2         11.3
+##  4 2018-12-01 2019-03-01    2008 Q3         11.3
+##  5 2018-12-01 2019-03-01    2008 Q4         11.3
+##  6 2018-12-01 2019-03-01    2009 Q1         11.3
+##  7 2018-12-01 2019-03-01    2009 Q2         11.3
+##  8 2019-03-01 2019-06-01    2007 Q4         11.3
+##  9 2019-03-01 2019-06-01    2008 Q1         11.3
+## 10 2019-03-01 2019-06-01    2008 Q2         11.3
+## # ℹ 18 more rows</code></pre>
+<pre class="r"><code># Producing RMSEs
+
+rmses &lt;- one_step_fc %&gt;% 
+  inner_join(
+    data %&gt;% transmute(forecast_date = date, actual = value),
+    by = &quot;forecast_date&quot;
+  ) %&gt;% 
+  group_by(break_label) %&gt;%
+  summarise(
+    rmse = sqrt(mean((actual - forecast)^2, na.rm = TRUE)),
+    .groups = &quot;drop&quot;
+  ) %&gt;%
+  arrange(rmse)
+
+print(rmses)</code></pre>
+<pre><code>## # A tibble: 7 × 2
+##   break_label    rmse
+##   &lt;chr&gt;         &lt;dbl&gt;
+## 1 2009 Q2     0.00370
+## 2 2009 Q1     0.00402
+## 3 2008 Q4     0.00436
+## 4 2008 Q3     0.00482
+## 5 2008 Q2     0.00523
+## 6 2008 Q1     0.00534
+## 7 2007 Q4     0.00550</code></pre>
 </div>
 
 
