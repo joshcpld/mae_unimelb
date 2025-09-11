@@ -1,0 +1,256 @@
+---
+title: "`r fname <- gsub('_', ' ', tools::file_path_sans_ext(basename(knitr::current_input()))); paste0(toupper(substr(fname, 1, 1)), substr(fname, 2, nchar(fname)))`"
+author: "Josh Copeland (SID: 1444772)"
+output: html_document
+date: "`r Sys.Date()`"
+---
+
+```{r setup, include=FALSE}
+
+library(urca)
+library(forecast)
+
+```
+
+```{r setup_comment, include=TRUE}
+
+#Packages used:
+
+# library(urca)
+# library(forecast)
+
+```
+
+```{r data_read}
+
+dt <- read.csv("RetailSales.csv")
+
+Retail_m <- ts(dt$Total, frequency=12, start=c(1982,4), end=c(2024,9))
+
+logRetailSales <- window(log(aggregate(Retail_m, nfrequency=4)), 
+                         start=c(2000,1), end=c(2018,4))
+n <- length(logRetailSales)
+
+
+```
+
+# Q1  
+
+Write code for the ADF test with linear trend. This is included in the ur.df command so we will be able to validate the results for this case. Using the same sample size as we have for retail sales, simulate a random drawing from an ARIMA(0,1,0) model, which satisfies the null hypothesis of a unit root. Compute the ADF test equation for this time series, including a linear time trend and no additional lagged differences.
+
+
+
+```{r q1}
+
+library(urca)
+# Set seed so the output is the same for each run
+set.seed(42)
+
+# Random drawing from ARIMA(0,1,0) model
+Y <- arima.sim(n=n, model=list(order=c(0,1,0)))[-1]
+
+# Compute ADF test with trend, print out equation
+ADF <- ur.df(Y, type="trend", lags=0)
+print(round(ADF@testreg$coefficients,4))
+
+# p: lag length in ADF test equation
+p <- 1
+
+# Observation indices for AR(p) model
+t <- (p+1):n
+
+# First difference and one lag of Y:
+DY <- Y[t]-Y[t-1]
+Y1 <- Y[t-1]
+
+# ADF testing equation with linear trend
+eq0 <- summary(lm(DY~Y1+t))
+print(round(eq0$coefficients,4))
+
+```
+
+
+
+# Q3
+
+Now extend the lm approach to the ADF test above to incorporate the quarterly dummies and GFC trend break appropriate for the retail sales time series.
+
+
+# Q2 
+
+Use the lm code above to build a simulation of 1,000 drawings from the ARIMA(0,1,0) model and the subsequent ADF test statistic including linear trend.
+
+```{r q2}
+
+set.seed(42)
+p <- 1
+t <- (p+1):n
+
+reps <- 1000
+tADF <- matrix(nrow=reps, ncol=1)
+
+for (r in 1:reps){
+
+  # Random drawing from ARIMA(0,1,0) model
+  Y <- arima.sim(n=n, model=list(order=c(0,1,0)))[-1]
+
+  # ADF testing equation with linear trend
+  DY <- Y[t]-Y[t-1]
+  Y1 <- Y[t-1]
+  tADF[r] <- summary(lm(DY~Y1+t))$coefficients["Y1","t value"]
+
+}
+
+
+```
+
+
+### a) Create a histogram of the simulations of tADF and compare with the standard normal distribution
+
+```{r q2a}
+
+hist(tADF, breaks=30, freq=FALSE, xlim=c(-6,3))
+x <- seq(from=-6, to=3, by=0.1)
+lines(x, dnorm(x), col="red", lwd=2)
+
+
+```
+
+
+### b) Calculate simulated critical values at the 1%, 5% and 10% significance levels
+
+```{r q2b}
+
+SignificanceLevels <- c(0.01, 0.05, 0.1)
+cv_sim_2b <- quantile(tADF, probs=SignificanceLevels)
+
+cv_sim_2b
+
+```
+### c) Compare the simulated critical value with those from the qunitroot command.
+
+```{r q2c}
+
+cv_trend <- qunitroot(p=SignificanceLevels, 
+              N=n, trend="ct", statistic="t")
+
+cv_trend # These are slightly different from the siulated critical values - but pretty similar considering the number of observations.
+
+
+
+```
+
+# Q3 
+
+Now extend the lm approach to the ADF test above to incorporate the quarterly dummies and GFC trend break appropriate for the retail sales time series.
+
+```{r q3}
+
+p <- 1
+t <- (p+1):n
+
+# Setting up the X matrix of deterministic regressors
+QD <- seasonaldummy(logRetailSales)
+Time <- time(logRetailSales)
+gfc <- 2008.5
+Time_postgfc <- 1*(Time>gfc)*(Time-gfc)
+X <- cbind(Time, Time_postgfc, QD)[t,]
+
+reps <- 1000
+tADF <- matrix(nrow=reps, ncol=1)
+for (r in 1:reps){
+
+  # Simulate under H0
+  Y <- arima.sim(n=n, model=list(order=c(0,1,0)))[-1]
+
+  # ADF test include X deterministics
+  DY <- Y[t]-Y[t-1]
+  Y1 <- Y[t-1]
+  tADF[r] <- summary(lm(DY~Y1+X))$coefficients["Y1","t value"]
+}
+
+
+```
+
+
+### a) Create a histogram of the simulations of tADF and copmare with the standard normal distribution
+
+```{r q3a}
+
+hist(tADF, breaks=30, freq=FALSE, xlim=c(-6,3))
+x <- seq(from=-6, to=3, by=0.1)
+lines(x, dnorm(x), col="red", lwd=2)
+
+```
+
+### b) Calculate simulated critical values at the 1%, 5% and 10% significance levels.
+
+```{r 3b}
+
+SignificanceLevels <- c(0.01, 0.05, 0.1)
+cv_sim <- quantile(tADF, probs=SignificanceLevels)
+
+```
+
+### c) Compare these critical values to those in 2(b) above. Note the differences due to the deterministic trend specification.
+
+
+```{r 3c}
+
+# The specification of the deterministic trend creates significantly higher critical values compared to thosein the earlier question in 2b.
+
+cv_sim
+
+cv_sim_2b
+
+
+```
+
+# Q4
+
+### a) Calculate the ADF test on log retail sales including trend, GFC trend break and quarterly dummies. Recall we previously found an AR(3) model was a good fit in conjunction with this deterministic specification, so it is appropriate to set  for this test.
+
+```{r 4a}
+
+p <- 3
+t <- (p+1):n
+
+X <- cbind(Time, Time_postgfc, QD)[t,]
+DY <- logRetailSales[t]-logRetailSales[t-1]
+Y1 <- logRetailSales[t-1]
+DY1 <- logRetailSales[t-1]-logRetailSales[t-2]
+DY2 <- logRetailSales[t-2]-logRetailSales[t-3]
+
+eq <- summary(lm(DY~Y1+X+DY1+DY2))
+
+
+tstat <- coef(eq)["Y1", "t value"]
+
+```
+
+
+### b) Carry out the test at the 5% level using the simulated critical value from question 3.
+
+
+```{r 4b}
+
+crit_5pct <- if (exists("cv_sim")) unname(cv_sim["5%"]) else as.numeric(quantile(tADF, probs = 0.05))
+
+decision <- if (tstat < crit_5pct) "Reject H0: unit root" else "Fail to reject H0"
+
+print(tstat)
+print(crit_5pct)
+print(decision)
+
+```
+
+### c) Also use your simulation from question 3 to compute the p-value for this test.
+
+```{r 4c}
+
+stopifnot(exists("tADF"))  # simulated ADF stats from Q3
+pval <- mean(tADF <= tstat)
+
+print(pval)
+
+``` 

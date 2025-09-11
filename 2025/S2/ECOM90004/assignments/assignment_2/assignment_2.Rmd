@@ -1,0 +1,408 @@
+---
+title: "ECOM90004 Assignment 2 - code appendix"
+output: html_document
+author: "Josh Copeland (SID: 1444772)"
+date: "`r Sys.Date()`"
+---
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+library(lubridate)
+library(janitor)
+library(forecast)
+library(urca)
+
+theme_set(theme_minimal())
+
+```
+
+```{r setup_comment}
+
+#Packages used:
+
+# library(tidyverse)
+# library(lubridate)
+# library(janitor)
+# library(forecast)
+# library(urca)
+
+```
+
+# Question 1
+
+```{r q1_setup}
+
+data <- read_csv("usrealgdppercapita.csv") %>% 
+  select(date = observation_date, value = RealGDPPerCap) %>% 
+  mutate(date = dmy(date)) %>% 
+  na.omit()
+
+```
+
+## (a)
+
+
+```{r q1a}
+
+data <- data %>% 
+  mutate(time = row_number()*0.25)
+
+trend_model <- lm(value ~ time, data = data)
+
+summary(trend_model)
+
+trend_model_data <- tibble(
+  date       = data$date,
+  value      = data$value,
+  fitted     = fitted(trend_model),
+  residuals  = resid(trend_model)
+)
+
+c1 <- ggplot(trend_model_data, aes(x = date, y = value)) +
+  geom_line() +
+  geom_line(aes(y = fitted), color = "red", linewidth = 1) +
+  labs(
+    title = "Chart 1: Time trend \n model fitted values",
+    y = "value",
+    x = "date"
+  ) 
+
+c2 <- ggplot(trend_model_data, aes(x = date, y = residuals)) +
+  geom_line() +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(
+    title = "Chart 2: Time trend \n model residuals",
+    y = "residuals",
+    x = "date"
+  ) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+ggsave("chart1.png", c1, width = 3, height = 2.5, units = "in", dpi = 300)
+ggsave("chart2.png", c2, width = 3, height = 2.5, units = "in", dpi = 300)
+
+```
+
+## (b)
+
+```{r q1b}
+
+data <- data %>% 
+  mutate(
+    du_1 = if_else(lubridate::year(date) > 1973, 1, 0),
+    dt_1 = if_else(lubridate::year(date) > 1973, time, 0)
+  )
+
+
+one_break_model <- lm(value ~ time + du_1 + dt_1, data = data)
+
+summary(one_break_model)
+
+one_break_model_data <- tibble(
+  date      = data$date,
+  value     = data$value,
+  fitted    = fitted(one_break_model),
+  residuals = resid(one_break_model)
+)
+
+
+c3 <- ggplot(one_break_model_data, aes(x = date, y = value)) +
+  geom_line() +
+  geom_line(aes(y = fitted), color = "red", linewidth = 1) +
+  labs(
+    title = "Chart 3: One break model \n fitted values",
+    y = "y value",
+    x = "date"
+  ) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Chart 4
+c4 <- ggplot(one_break_model_data, aes(x = date, y = residuals)) +
+  geom_line() +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(
+    title = "Chart 4: One break model \n residuals",
+    y = "residuals",
+    x = "date"
+  ) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+ggsave("chart3.png", c3, width = 3, height = 2.5, units = "in", dpi = 300)
+ggsave("chart4.png", c4, width = 3, height = 2.5, units = "in", dpi = 300)
+
+```
+
+## (c)
+
+```{r q1c}
+
+data <- data %>% 
+  mutate(
+    du_2 = if_else(lubridate::year(date) > 2008, 1, 0),
+    dt_2 = if_else(lubridate::year(date) > 2008, time, 0)
+  )
+
+two_break_model <- lm(value ~ time + du_1 + dt_1 + du_2 + dt_2, data = data)
+summary(two_break_model)
+
+two_break_model_data <- tibble(
+  date      = data$date,
+  value     = data$value,
+  fitted    = fitted(two_break_model),
+  residuals = resid(two_break_model)
+)
+
+# Chart 5
+c5 <- ggplot(two_break_model_data, aes(x = date, y = value)) +
+  geom_line() +
+  geom_line(aes(y = fitted), color = "red", linewidth = 1) +
+  labs(
+    title = "Chart 5: Two break model \n fitted values",
+    y = "value",
+    x = "date"
+  ) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Chart 6
+c6 <- ggplot(two_break_model_data, aes(x = date, y = residuals)) +
+  geom_line() +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(
+    title = "Chart 6: Two break model \n residuals",
+    y = "residuals",
+    x = "date"
+  ) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+ggsave("chart5.png", c5, width = 3, height = 2.5, units = "in", dpi = 300)
+ggsave("chart6.png", c6, width = 3, height = 2.5, units = "in", dpi = 300)
+
+```
+
+## (d) WRITTEN ANSWERS ONLY
+
+
+# Question 2
+
+### (a)
+
+```{r q2a}
+
+
+select_ar_summary <- function(formula, data, p_max = 8) {
+  y  <- data$value
+  X  <- model.matrix(formula, data = data)
+  n  <- length(y)
+
+  # Ljung–Box lag: min(8, n/5)
+  lb_lag <- min(8, floor(n/5))
+
+  # fit AR(p) with exogenous regressors for p = 0..p_max
+  grid <- map_dfr(0:p_max, function(p) {
+    fit <- Arima(
+      y, order = c(p, 0, 0),
+      xreg = X,
+      include.mean = FALSE,
+      method = "ML"
+    )
+    tibble(
+      p    = p,
+      AIC  = fit$aic,
+      BIC  = fit$bic,
+      AICc = fit$aicc,
+      fit  = list(fit)
+    )
+  })
+
+  # pick best lag by AICc
+  best   <- grid %>% slice_min(AICc, with_ties = FALSE)
+  best_p <- best$p
+  best_f <- best$fit[[1]]
+
+  # Ljung–Box test
+  lb <- Box.test(residuals(best_f), type = "Ljung-Box",
+                 lag = lb_lag, fitdf = best_p)
+
+  tibble(
+    model   = deparse(formula),
+    best_p  = best_p,
+    lb_pval = unname(lb$p.value)
+  )
+}
+
+# Example usage
+trend     <- value ~ time
+one_break <- value ~ time + du_1 + dt_1
+two_break <- value ~ time + du_1 + dt_1 + du_2 + dt_2
+
+ar_summary <- bind_rows(
+  select_ar_summary(trend, data),
+  select_ar_summary(one_break, data),
+  select_ar_summary(two_break, data)
+) %>%
+  mutate(model = c("trend", "one break", "two breaks"))
+
+print(ar_summary)
+
+```
+
+
+### b) 
+
+```{r q2b}
+
+
+# 1. Collect residuals from the three models
+Z_data <- tibble(
+  date      = data$date,
+  trend     = residuals(trend_model),
+  one_break = residuals(one_break_model),
+  two_break = residuals(two_break_model)
+) %>%
+  pivot_longer(-date, names_to = "model", values_to = "residual")
+
+# 2. Time series plots
+ggplot(Z_data, aes(x = date, y = residual)) +
+  geom_line(colour = "steelblue") +
+  facet_wrap(~model, ncol = 1, scales = "free_y") +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(
+    title = "Residuals (Z_t) from trend, one-break, and two-break models",
+    x = "date",
+    y = "residual"
+  )
+
+# 3. ADF test function with lag selection by AIC, max 5
+get_adf <- function(z, model_name, max_lags = 5) {
+  test <- ur.df(z, type = "none", lags = max_lags, selectlags = "AIC")
+  tau  <- test@teststat[1]
+  cv   <- test@cval[1, ]
+  
+  tibble(
+    model        = model_name,
+    best_lag_AIC = test@lags,   # reports chosen lag order
+    tau_stat     = tau,
+    cv_1pct      = cv["1pct"],
+    cv_5pct      = cv["5pct"],
+    cv_10pct     = cv["10pct"]
+  )
+}
+
+# 4. Apply to all three models
+adf_table <- bind_rows(
+  get_adf(residuals(trend_model), "trend"),
+  get_adf(residuals(one_break_model), "one break"),
+  get_adf(residuals(two_break_model), "two breaks")
+)
+
+print(adf_table)
+
+
+
+```
+
+
+## (c)
+
+```{r q2c}
+
+
+# Collect residuals
+Z <- list(
+  trend      = residuals(trend_model),
+  one_break  = residuals(one_break_model),
+  two_break  = residuals(two_break_model)
+)
+
+# Function: simulate null distribution of ADF tau (type="none")
+simulate_adf_null <- function(n, reps = 1000, max_lags = 5, seed = 123) {
+  set.seed(seed)
+  taus <- numeric(reps)
+  for (r in seq_len(reps)) {
+    # Generate unit root process under H0
+    e <- rnorm(n)
+    z <- cumsum(e)
+    # ADF test with lag selection by AIC (0..max_lags)
+    test <- ur.df(z, type = "none", lags = max_lags, selectlags = "AIC")
+    taus[r] <- test@teststat[1]
+  }
+  taus
+}
+
+# Simulation per model
+reps <- 1000
+max_lags <- 5
+
+cv_table <- tibble(
+  model = names(Z),
+  n     = map_int(Z, length),
+  tau_actual = map_dbl(Z, ~ {
+    test <- ur.df(.x, type = "none", lags = max_lags, selectlags = "AIC")
+    test@teststat[1]
+  }),
+  cv5_simulated = map2_dbl(map_int(Z, length), names(Z), ~ {
+    taus <- simulate_adf_null(.x, reps = reps, max_lags = max_lags)
+    quantile(taus, probs = 0.05, na.rm = TRUE)
+  })
+) %>%
+  mutate(reject_5pct = tau_actual < cv5_simulated)
+
+print(cv_table)
+
+```
+
+## (d)
+
+```{r q2d}
+
+# Function: compute observed ADF tau for a given series
+adf_tau_actual <- function(series, max_lags) {
+  test <- ur.df(series, type = "none", lags = max_lags, selectlags = "AIC")
+  unname(test@teststat[1])
+}
+
+# Function: simulate null distribution of ADF tau under unit root
+simulate_adf_null <- function(n, reps, max_lags, seed = 123) {
+  set.seed(seed + n)
+  taus <- numeric(reps)
+  for (r in seq_len(reps)) {
+    z <- cumsum(rnorm(n))  # random walk under H0
+    test <- ur.df(z, type = "none", lags = max_lags, selectlags = "AIC")
+    taus[r] <- unname(test@teststat[1])
+  }
+  taus
+}
+
+# Function: empirical left-tail p-value
+emp_pval <- function(tau_obs, taus_null) {
+  (sum(taus_null <= tau_obs) + 1) / (length(taus_null) + 1)
+}
+
+# Compute observed tau and simulated p-value for each model
+pval_tbl <- tibble(
+  model   = c("trend", "one break", "two breaks"),
+  resid   = list(
+    residuals(trend_model),
+    residuals(one_break_model),
+    residuals(two_break_model)
+  )
+) %>%
+  mutate(
+    n        = map_int(resid, length),
+    tau_obs  = map_dbl(resid, ~ adf_tau_actual(.x, max_lags)),
+    taus_sim = map(n, ~ simulate_adf_null(.x, reps = reps, max_lags = max_lags)),
+    p_value  = map2_dbl(tau_obs, taus_sim, emp_pval)
+  ) %>%
+  select(model, n, tau_obs, p_value)
+
+print(pval_tbl)
+
+
+```
+
+
+## (e)  WRITTEN ANSWERS ONLY
+
+## (f) WRITTEN ANSWERS ONLY
+
+
