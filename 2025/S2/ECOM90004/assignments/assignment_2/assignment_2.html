@@ -561,8 +561,35 @@ c6 &lt;- ggplot(two_break_model_data, aes(x = date, y = residuals)) +
 ggsave(&quot;chart5.png&quot;, c5, width = 3, height = 2.5, units = &quot;in&quot;, dpi = 300)
 ggsave(&quot;chart6.png&quot;, c6, width = 3, height = 2.5, units = &quot;in&quot;, dpi = 300)</code></pre>
 </div>
-<div id="d-written-answers-only" class="section level2">
-<h2>(d) WRITTEN ANSWERS ONLY</h2>
+<div id="d-written-answers-only-except-for-iii" class="section level2">
+<h2>(d) WRITTEN ANSWERS ONLY EXCEPT FOR III</h2>
+<div id="iii" class="section level3">
+<h3>(iii)</h3>
+<pre class="r"><code># We see if Perron&#39;s imposition of continuity is supported at 1973 and 2008 by applying a Wald test to see if the implied jump in the fitted value at each breakpoint is significantly different from zero.
+
+b &lt;- coef(two_break_model)
+V &lt;- vcov(two_break_model)
+
+# Jump at 1973
+J73_hat &lt;- b[&quot;du_1&quot;] + 1973 * b[&quot;dt_1&quot;]
+se_J73  &lt;- sqrt(c(1,1973) %*% V[c(&quot;du_1&quot;,&quot;dt_1&quot;), c(&quot;du_1&quot;,&quot;dt_1&quot;)] %*% c(1,1973))
+t_J73   &lt;- J73_hat / se_J73
+p_J73   &lt;- 2 * (1 - pnorm(abs(t_J73)))   # two-sided p-value
+
+# Jump at 2008
+J08_hat &lt;- b[&quot;du_2&quot;] + 2008 * b[&quot;dt_2&quot;]
+se_J08  &lt;- sqrt(c(1,2008) %*% V[c(&quot;du_2&quot;,&quot;dt_2&quot;), c(&quot;du_2&quot;,&quot;dt_2&quot;)] %*% c(1,2008))
+t_J08   &lt;- J08_hat / se_J08
+p_J08   &lt;- 2 * (1 - pnorm(abs(t_J08)))
+
+# Print results
+print(p_J73)</code></pre>
+<pre><code>##      [,1]
+## [1,]    0</code></pre>
+<pre class="r"><code>print(p_J08)</code></pre>
+<pre><code>##            [,1]
+## [1,] 0.06306952</code></pre>
+</div>
 </div>
 </div>
 <div id="question-2" class="section level1">

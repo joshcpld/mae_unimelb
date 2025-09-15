@@ -179,7 +179,35 @@ ggsave("chart6.png", c6, width = 3, height = 2.5, units = "in", dpi = 300)
 
 ```
 
-## (d) WRITTEN ANSWERS ONLY
+## (d) WRITTEN ANSWERS ONLY EXCEPT FOR III
+
+### (iii)
+
+
+```{r q1diii}
+
+# We see if Perron's imposition of continuity is supported at 1973 and 2008 by applying a Wald test to see if the implied jump in the fitted value at each breakpoint is significantly different from zero.
+
+b <- coef(two_break_model)
+V <- vcov(two_break_model)
+
+# Jump at 1973
+J73_hat <- b["du_1"] + 1973 * b["dt_1"]
+se_J73  <- sqrt(c(1,1973) %*% V[c("du_1","dt_1"), c("du_1","dt_1")] %*% c(1,1973))
+t_J73   <- J73_hat / se_J73
+p_J73   <- 2 * (1 - pnorm(abs(t_J73)))   # two-sided p-value
+
+# Jump at 2008
+J08_hat <- b["du_2"] + 2008 * b["dt_2"]
+se_J08  <- sqrt(c(1,2008) %*% V[c("du_2","dt_2"), c("du_2","dt_2")] %*% c(1,2008))
+t_J08   <- J08_hat / se_J08
+p_J08   <- 2 * (1 - pnorm(abs(t_J08)))
+
+# Print results
+print(p_J73)
+print(p_J08)
+
+```
 
 
 # Question 2
