@@ -48,31 +48,31 @@ data <- read_csv("usrealgdppercapita.csv") %>%
 data <- data %>% 
   mutate(time = row_number()*0.25)
 
-trend_model <- lm(value ~ time, data = data)
+linear_model <- lm(value ~ time, data = data)
 
-summary(trend_model)
+summary(linear_model)
 
-trend_model_data <- tibble(
+linear_model_data <- tibble(
   date       = data$date,
   value      = data$value,
-  fitted     = fitted(trend_model),
-  residuals  = resid(trend_model)
+  fitted     = fitted(linear_model),
+  residuals  = resid(linear_model)
 )
 
-c1 <- ggplot(trend_model_data, aes(x = date, y = value)) +
+c1 <- ggplot(linear_model_data, aes(x = date, y = value)) +
   geom_line() +
   geom_line(aes(y = fitted), color = "red", linewidth = 1) +
   labs(
-    title = "Chart 1: Time trend \n model fitted values",
+    title = "Chart 1: Linear \n model fitted values",
     y = "value",
     x = "date"
   ) 
 
-c2 <- ggplot(trend_model_data, aes(x = date, y = residuals)) +
+c2 <- ggplot(linear_model_data, aes(x = date, y = residuals)) +
   geom_line() +
   geom_hline(yintercept = 0, linetype = "dashed") +
   labs(
-    title = "Chart 2: Time trend \n model residuals",
+    title = "Chart 2: Linear \n model residuals",
     y = "residuals",
     x = "date"
   ) +
@@ -231,16 +231,16 @@ select_ar_summary <- function(formula, data, p_max = 8) {
 }
 
 # Example usage
-trend     <- value ~ time
+linear     <- value ~ time
 one_break <- value ~ time + du_1 + dt_1
 two_break <- value ~ time + du_1 + dt_1 + du_2 + dt_2
 
 ar_summary <- bind_rows(
-  select_ar_summary(trend, data),
+  select_ar_summary(linear, data),
   select_ar_summary(one_break, data),
   select_ar_summary(two_break, data)
 ) %>%
-  mutate(model = c("trend", "one break", "two breaks"))
+  mutate(model = c("linear", "one break", "two breaks"))
 
 print(ar_summary)
 
@@ -255,7 +255,7 @@ print(ar_summary)
 # 1. Collect residuals from the three models
 Z_data <- tibble(
   date      = data$date,
-  trend     = residuals(trend_model),
+  linear     = residuals(linear_model),
   one_break = residuals(one_break_model),
   two_break = residuals(two_break_model)
 ) %>%
@@ -267,7 +267,7 @@ ggplot(Z_data, aes(x = date, y = residual)) +
   facet_wrap(~model, ncol = 1, scales = "free_y") +
   geom_hline(yintercept = 0, linetype = "dashed") +
   labs(
-    title = "Residuals (Z_t) from trend, one-break, and two-break models",
+    title = "Residuals (Z_t) from linear, one-break, and two-break models",
     x = "date",
     y = "residual"
   )
@@ -290,7 +290,7 @@ get_adf <- function(z, model_name, max_lags = 5) {
 
 # 4. Apply to all three models
 adf_table <- bind_rows(
-  get_adf(residuals(trend_model), "trend"),
+  get_adf(residuals(linear_model), "linear"),
   get_adf(residuals(one_break_model), "one break"),
   get_adf(residuals(two_break_model), "two breaks")
 )
@@ -309,7 +309,7 @@ print(adf_table)
 
 # Collect residuals
 Z <- list(
-  trend      = residuals(trend_model),
+  linear      = residuals(linear_model),
   one_break  = residuals(one_break_model),
   two_break  = residuals(two_break_model)
 )
@@ -380,9 +380,9 @@ emp_pval <- function(tau_obs, taus_null) {
 
 # Compute observed tau and simulated p-value for each model
 pval_tbl <- tibble(
-  model   = c("trend", "one break", "two breaks"),
+  model   = c("linear", "one break", "two breaks"),
   resid   = list(
-    residuals(trend_model),
+    residuals(linear_model),
     residuals(one_break_model),
     residuals(two_break_model)
   )

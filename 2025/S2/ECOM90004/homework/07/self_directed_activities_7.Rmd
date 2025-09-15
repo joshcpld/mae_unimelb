@@ -1,0 +1,309 @@
+---
+title: "`r fname <- gsub('_', ' ', tools::file_path_sans_ext(basename(knitr::current_input()))); paste0(toupper(substr(fname, 1, 1)), substr(fname, 2, nchar(fname)))`"
+author: "Josh Copeland (SID: 1444772)"
+output: html_document
+date: "`r Sys.Date()`"
+---
+
+```{r setup, include=FALSE}
+
+library(urca)
+library(forecast)
+library(tidyverse)
+
+```
+
+```{r setup_comment, include=TRUE}
+
+#Packages used:
+
+# library(urca)
+# library(forecast)
+# library(tidyverse)
+
+```
+
+
+# Q1  
+
+Read in the data file and set up time series as below to implement this forecasting exercise.
+
+
+
+```{r q1}
+
+# Data read
+
+dt <- read.csv("QtrlyCommodityPriceIndex.csv")
+
+# log of commodity price index, 1982q3 to 2024q4
+P <- ts(dt$CommodityPriceIndex, start=c(1982,3), 
+        end=c(2024,4), frequency=4)
+Y <- log(P)
+DY <- diff(Y)
+
+# 2024 observations for forecast evaluation
+Pf <- window(P, start=c(2024,1), end=c(2024,4))
+Yf <- window(Y, start=c(2024,1), end=c(2024,4))
+DYf <- window(DY, start=c(2024,1), end=c(2024,4))
+
+# Estimation sample ends 2023q4
+Y <- window(Y, end=c(2023,4))
+DY <- window(DY, end=c(2023,4))
+
+par(mfrow=c(2,1))
+
+```
+
+Make time series plots of Y and DY and carry out ADF tests to decide whether / how much to difference Y prior to AR modelling.
+
+```{r q1_1}
+
+# Plot Y and DY
+autoplot(Y, ts.colour="blue") +
+  ggtitle("Log Commodity Price Index") +
+  ylab("log index")
+
+autoplot(DY, ts.colour="red") +
+  ggtitle("First Difference of Commodity Price Index") +
+  ylab("Δ log index")
+
+# ADF test on Y (with trend)
+ADF_Y <- ur.df(Y, type="trend", lags=9, selectlags="AIC")
+summary(ADF_Y)
+
+# ADF test on DY (with drift)
+ADF_DY <- ur.df(DY, type="none", lags=9, selectlags="AIC")
+summary(ADF_DY)
+
+
+```
+
+Reject the null hypothesis on the ADF test on the differenced series. So difference it once.
+
+
+# Q2 
+
+In the usual way, select an appropriate AR(p) model for DY.
+
+``` {r q2}
+
+
+
+pmax <- 9
+Stats <- matrix(
+  NA_real_, 
+  nrow = pmax + 1, 
+  ncol = 2,
+  dimnames = list(paste0("p=", 0:pmax), c("LBp", "AICc"))
+)
+
+for (p in 0:pmax) {
+  eq <- forecast::Arima(DY, order = c(p, 0, 0))
+  Stats[p + 1, "LBp"]  <- stats::Box.test(eq$residuals, lag = p + 4,
+                                          type = "Ljung-Box", fitdf = p)$p.value
+  Stats[p + 1, "AICc"] <- eq$aicc
+}
+
+# Convert to data.frame for easier sorting
+Stats_df <- as.data.frame(Stats)
+Stats_df$p <- 0:pmax
+
+# Order by AICc ascending (most negative at top)
+Stats_sorted <- Stats_df[order(Stats_df$AICc), ]
+
+print(round(Stats_sorted, 4))
+
+
+```
+
+The preferred p value is 4, which is supported by being unable to reject the null hypothesis of the LB test - no evidence of autocorrelation in its residuals.
+
+Now to calculate the forecasts:
+
+```{r q2_2}}
+
+# Preferred AR(p) order
+p <- 4
+
+# Maximum forecast horizon:
+hmax <- length(DYf)
+
+# Estimate selected model:
+eq <- Arima(DY, order=c(p,0,0))
+
+# Recursive forecasts out to horizon hmax:
+DYf1 <- forecast(eq, h=hmax)$mean
+
+
+```
+
+# Q3 
+
+Implement the direct forecasting approach to compute forecasts for DY for each of the four quarters of 2024
+
+
+```{r q3}
+
+# Direct forecasting - model selection
+
+# Storage for AICc and Ljung-Box p-values
+AICc <- matrix(nrow=1+pmax, ncol=hmax)
+rownames(AICc) <- paste0("p=",0:pmax)
+colnames(AICc) <- paste0("h=",1:hmax)
+LBp <- AICc
+
+# Loop over all forecast horizons
+for (h in 1:hmax){
+
+  # Loop over all possible AR lag orders
+  for (p in c(0,h:pmax)){
+
+    # Estimate AR(p)
+    # zeros has same length as parameters in AR(p)+intercept
+    zeros <- rep(NA,p+1)
+    # coefficients on first h-1 lags set to zero
+    if (p>0 & h>1){
+      zeros[1:(h-1)] <- 0
+    }
+    eq <- Arima(DY, order=c(p,0,0), fixed=zeros)        
+    AICc[1+p,h] <- eq$aicc
+
+    # Ljung-Box statistic, include 4 lags beyond AR order
+    LB <- Box.test(eq$residuals, lag=p+4, type="Ljung-Box")$statistic
+    # Remove first h-1 lags from LB statistic
+    if (h>1){
+      LB <- LB-Box.test(eq$residuals, lag=h-1, type="Ljung-Box")$statistic
+    }
+    # p-value for LB test
+    LBp[1+p,h] <- pchisq(LB, df=4, lower.tail=FALSE)
+
+  }
+}
+print(round(LBp,4))
+print(round(AICc,2))
+
+##### Automate selecting the optimal p for each direct forecast
+
+# Convert matrices to long tibble
+sel_tbl <- as.data.frame(AICc) |>
+  tibble::rownames_to_column("p") |>
+  tidyr::pivot_longer(-p, names_to = "h", values_to = "AICc") |>
+  mutate(LBp = as.vector(LBp),
+         p = as.integer(sub("p=", "", p)),
+         h = as.integer(sub("h=", "", h)))
+
+# For each horizon, pick the p with min AICc among LBp > 0.05; 
+# if none pass, take the global min AICc
+ph_tbl <- sel_tbl |>
+  group_by(h) |>
+  summarise(
+    ph = if (any(LBp > 0.05)) {
+      p[which.min(AICc + ifelse(LBp > 0.05, 0, Inf))]
+    } else {
+      p[which.min(AICc)]
+    },
+    .groups = "drop"
+  )
+
+# As in the recursive case, all models select AR(4)
+ph <- ph_tbl$ph
+print(ph_tbl)
+
+
+zeros <- rep(NA,p+1)
+
+p <- 4
+h <- 3
+
+zeros <- rep(NA,p+1)
+zeros[1:(h-1)] <- 0
+print(zeros)
+
+# Ljung-Box statistic, include 4 lags beyond AR order
+LB <- Box.test(eq$residuals, lag=p+4, type="Ljung-Box")$statistic
+
+# Remove first h-1 lags from LB statistic
+if (h>1){
+  LB <- LB-Box.test(eq$residuals, lag=h-1, type="Ljung-Box")$statistic
+}
+# p-value for LB test        
+LBp[1+p,h] <- pchisq(LB, df=4, lower.tail=FALSE)
+
+# Direct forecasting - forecasts
+# ph contains the AR lag order for each h
+
+
+# ONce the AR lag order are selected for each h, compute direct forecasts for each quarter of 2024.
+
+DYf2 <- DYf1
+for (h in 1:hmax){
+  zeros <- c(rep(0,h-1),rep(NA,ph[h]-h+2))
+  eq <- Arima(DY, order=c(ph[h],0,0), fixed=zeros)
+  DYf2[h] <- forecast(eq, h=h)$mean[h]
+}
+
+```
+
+
+# Q4 
+
+Calculate RMSEs to compare the accuracy of the recursive and indirect forecasts of DY over the four quarters of 2024.
+
+It shows the first method is slightly more accurate - but not super matierally.
+
+
+``` {r q4}
+
+RMSE_DY_Recursive <- sqrt(mean((DYf-DYf1)^2))
+RMSE_DY_Direct <- sqrt(mean((DYf-DYf2)^2))
+
+print(RMSE_DY_Recursive)
+print(RMSE_DY_Direct)
+
+```
+
+
+# Q5 
+
+Now convert these growth rates to forecast levels via cumulative sums. Comparing outputs shows direct forecasts always incur a lower RMSE.
+
+```{r q5}
+
+# Last observed Y (log index)
+n <- length(Y)
+
+# Convert forecasts of ΔY into forecasts of Y
+Yf1 <- Y[n] + cumsum(DYf1)   # recursive
+Yf2 <- Y[n] + cumsum(DYf2)   # direct
+
+# Convert forecasts of Y into forecasts of P
+Pf1 <- exp(Yf1)
+Pf2 <- exp(Yf2)
+
+# 1. RMSEs in differences (ΔY)
+RMSE_DY_Recursive <- sqrt(mean((DYf - DYf1)^2))
+RMSE_DY_Direct    <- sqrt(mean((DYf - DYf2)^2))
+
+# 2. RMSEs in log-levels (Y)
+RMSE_Y_Recursive  <- sqrt(mean((Yf - Yf1)^2))
+RMSE_Y_Direct     <- sqrt(mean((Yf - Yf2)^2))
+
+# 3. RMSEs in original levels (P)
+RMSE_P_Recursive  <- sqrt(mean((Pf - Pf1)^2))
+RMSE_P_Direct     <- sqrt(mean((Pf - Pf2)^2))
+
+# 4. Combine into a tidy table
+rmse_tbl <- tibble(
+  Variable = c("differences", "log-levels", "index levels"),
+  Recursive = c(RMSE_DY_Recursive, RMSE_Y_Recursive, RMSE_P_Recursive),
+  Direct    = c(RMSE_DY_Direct,    RMSE_Y_Direct,    RMSE_P_Direct)
+)
+
+# 5. Add column showing which method is more accurate
+rmse_tbl <- rmse_tbl %>%
+  mutate(More_Accurate = ifelse(Recursive < Direct, "Recursive", "Direct"))
+
+print(rmse_tbl)
+
+```
