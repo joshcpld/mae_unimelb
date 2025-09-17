@@ -11,6 +11,7 @@ library(tidyverse)
 library(lubridate)
 library(forecast)
 library(urca)
+library(car)
 
 theme_set(theme_minimal())
 
@@ -24,156 +25,64 @@ theme_set(theme_minimal())
 # library(lubridate)
 # library(forecast)
 # library(urca)
+#library(car)
 
 ```
 
 # Question 1
 
-```{r q1_setup}
+# (a) - (c)
 
-data <- read_csv("usrealgdppercapita.csv") %>% 
+```{r q1a_to_q1c}
+
+# Question 1
+
+# For code efficiency, answers to Q1a-Q1c are all given together below
+
+# Data import and cleaning
+
+data <- read_csv("USRealGDPPerCapita.csv") %>% 
   select(date = observation_date, value = RealGDPPerCap) %>% 
   mutate(date = dmy(date)) %>% 
-  na.omit()
+  mutate(value = log(value)) %>% 
+  na.omit() %>%
+  # Variables for models
+  mutate(time = row_number()*0.25) %>% 
+  mutate(du_1 = if_else(lubridate::year(date) > 1973, 1, 0), dt_1 = if_else(year(date) > 1973, time, 0)) %>% 
+  mutate(du_2 = if_else(lubridate::year(date) > 2008, 1, 0), dt_2 = if_else(year(date) > 2008, time, 0))
 
-```
-
-## (a)
-
-
-```{r q1a}
-
-data <- data %>% 
-  mutate(time = row_number()*0.25)
+# Creating models
 
 linear_model <- lm(value ~ time, data = data)
-
-summary(linear_model)
-
-linear_model_data <- tibble(
-  date       = data$date,
-  value      = data$value,
-  fitted     = fitted(linear_model),
-  residuals  = resid(linear_model)
-)
-
-c1 <- ggplot(linear_model_data, aes(x = date, y = value)) +
-  geom_line() +
-  geom_line(aes(y = fitted), color = "red", linewidth = 1) +
-  labs(
-    title = "Chart 1: Linear \n model fitted values",
-    y = "value",
-    x = "date"
-  ) 
-
-c2 <- ggplot(linear_model_data, aes(x = date, y = residuals)) +
-  geom_line() +
-  geom_hline(yintercept = 0, linetype = "dashed") +
-  labs(
-    title = "Chart 2: Linear \n model residuals",
-    y = "residuals",
-    x = "date"
-  ) +
-  theme(plot.title = element_text(hjust = 0.5))
-
-ggsave("chart1.png", c1, width = 3, height = 2.5, units = "in", dpi = 300)
-ggsave("chart2.png", c2, width = 3, height = 2.5, units = "in", dpi = 300)
-
-```
-
-## (b)
-
-```{r q1b}
-
-data <- data %>% 
-  mutate(
-    du_1 = if_else(lubridate::year(date) > 1973, 1, 0),
-    dt_1 = if_else(lubridate::year(date) > 1973, time, 0)
-  )
-
-
 one_break_model <- lm(value ~ time + du_1 + dt_1, data = data)
-
-summary(one_break_model)
-
-one_break_model_data <- tibble(
-  date      = data$date,
-  value     = data$value,
-  fitted    = fitted(one_break_model),
-  residuals = resid(one_break_model)
-)
-
-
-c3 <- ggplot(one_break_model_data, aes(x = date, y = value)) +
-  geom_line() +
-  geom_line(aes(y = fitted), color = "red", linewidth = 1) +
-  labs(
-    title = "Chart 3: One break model \n fitted values",
-    y = "y value",
-    x = "date"
-  ) +
-  theme(plot.title = element_text(hjust = 0.5))
-
-# Chart 4
-c4 <- ggplot(one_break_model_data, aes(x = date, y = residuals)) +
-  geom_line() +
-  geom_hline(yintercept = 0, linetype = "dashed") +
-  labs(
-    title = "Chart 4: One break model \n residuals",
-    y = "residuals",
-    x = "date"
-  ) +
-  theme(plot.title = element_text(hjust = 0.5))
-
-ggsave("chart3.png", c3, width = 3, height = 2.5, units = "in", dpi = 300)
-ggsave("chart4.png", c4, width = 3, height = 2.5, units = "in", dpi = 300)
-
-```
-
-## (c)
-
-```{r q1c}
-
-data <- data %>% 
-  mutate(
-    du_2 = if_else(lubridate::year(date) > 2008, 1, 0),
-    dt_2 = if_else(lubridate::year(date) > 2008, time, 0)
-  )
-
 two_break_model <- lm(value ~ time + du_1 + dt_1 + du_2 + dt_2, data = data)
-summary(two_break_model)
 
-two_break_model_data <- tibble(
-  date      = data$date,
-  value     = data$value,
-  fitted    = fitted(two_break_model),
-  residuals = resid(two_break_model)
+# Creating table of coefficients
+
+tab <- cbind(
+  "Linear model (a)"  = coef(linear_model)[c("(Intercept)","time","du_1","dt_1","du_2","dt_2")],
+  "1 break model (b)" = coef(one_break_model)[c("(Intercept)","time","du_1","dt_1","du_2","dt_2")],
+  "2 break model (c)" = coef(two_break_model)[c("(Intercept)","time","du_1","dt_1","du_2","dt_2")]
 )
 
-# Chart 5
-c5 <- ggplot(two_break_model_data, aes(x = date, y = value)) +
-  geom_line() +
-  geom_line(aes(y = fitted), color = "red", linewidth = 1) +
-  labs(
-    title = "Chart 5: Two break model \n fitted values",
-    y = "value",
-    x = "date"
-  ) +
-  theme(plot.title = element_text(hjust = 0.5))
+rownames(tab) <- c("beta_0","beta_1", "beta_3","beta_4","beta_5","beta_6")
+round(tab, 4)
 
-# Chart 6
-c6 <- ggplot(two_break_model_data, aes(x = date, y = residuals)) +
-  geom_line() +
-  geom_hline(yintercept = 0, linetype = "dashed") +
-  labs(
-    title = "Chart 6: Two break model \n residuals",
-    y = "residuals",
-    x = "date"
-  ) +
-  theme(plot.title = element_text(hjust = 0.5))
+# Creating charts of fitted values and residuals
 
-ggsave("chart5.png", c5, width = 3, height = 2.5, units = "in", dpi = 300)
-ggsave("chart6.png", c6, width = 3, height = 2.5, units = "in", dpi = 300)
+models <- list(linear_model, one_break_model, two_break_model)
+labs <- c("Linear model", "One-break model", "Two-break model")
+
+invisible(lapply(seq_along(models), function(i){
+  m <- models[[i]]; lab <- labs[i]
+  aug <- data.frame(date = data$date, value = data$value, fitted = fitted(m), residuals = resid(m))
+  p1 <- ggplot(aug, aes(date, value)) + geom_line() + geom_line(aes(y = fitted), color = "red", linewidth = 1) +
+        labs(title = paste0("Chart ", (i-1)*2+1, ": ", lab, " \n fitted values"), x = "date", y = "value")
+  p2 <- ggplot(aug, aes(date, residuals)) + geom_line() + geom_hline(yintercept = 0, linetype = "dashed") +
+        labs(title = paste0("Chart ", (i-1)*2+2, ": ", lab, " \n residuals"), x = "date", y = "residuals")
+  ggsave(paste0("chart", (i-1)*2+1, ".png"), p1, width = 3, height = 2.5, units = "in", dpi = 300)
+  ggsave(paste0("chart", (i-1)*2+2, ".png"), p2, width = 3, height = 2.5, units = "in", dpi = 300)
+}))
 
 ```
 
@@ -184,26 +93,13 @@ ggsave("chart6.png", c6, width = 3, height = 2.5, units = "in", dpi = 300)
 
 ```{r q1diii}
 
-# We see if Perron's imposition of continuity is supported at 1973 and 2008 by applying a Wald test to see if the implied jump in the fitted value at each breakpoint is significantly different from zero.
+# We see if Perron's imposition of continuity is supported at 1973 and 2008 by applying a linear hypothesis test to see if the implied jump in the fitted value at each breakpoint is significantly different from zero.
 
-b <- coef(two_break_model)
-V <- vcov(two_break_model)
+# H0: no jump at 1973
+linearHypothesis(two_break_model, "du_1 + 1973*dt_1 = 0")
 
-# Jump at 1973
-J73_hat <- b["du_1"] + 1973 * b["dt_1"]
-se_J73  <- sqrt(c(1,1973) %*% V[c("du_1","dt_1"), c("du_1","dt_1")] %*% c(1,1973))
-t_J73   <- J73_hat / se_J73
-p_J73   <- 2 * (1 - pnorm(abs(t_J73)))   # two-sided p-value
-
-# Jump at 2008
-J08_hat <- b["du_2"] + 2008 * b["dt_2"]
-se_J08  <- sqrt(c(1,2008) %*% V[c("du_2","dt_2"), c("du_2","dt_2")] %*% c(1,2008))
-t_J08   <- J08_hat / se_J08
-p_J08   <- 2 * (1 - pnorm(abs(t_J08)))
-
-# Print results
-print(p_J73)
-print(p_J08)
+# H0: no jump at 2008
+linearHypothesis(two_break_model, "du_2 + 2008*dt_2 = 0")
 
 ```
 
@@ -215,104 +111,58 @@ print(p_J08)
 ```{r q2a}
 
 
-select_ar_summary <- function(formula, data, p_max = 8) {
-  y  <- data$value
-  X  <- model.matrix(formula, data = data)
-  n  <- length(y)
+# function: fit AR(p) to residuals (Z), compute AICc & Ljung–Box, mark min AICc
+resid_ar_table <- function(model, label, pmax = 9) {
+  Z <- resid(model); AICc <- LBp <- numeric(pmax + 1)          # storage
+  for (p in 0:pmax) {                                          # loop over AR orders
+    eq <- Arima(Z, order = c(p, 0, 0), include.mean = FALSE, method = "ML")
+    AICc[p + 1] <- eq$aicc                                    # record AICc
+    LBp[p + 1] <- Box.test(residuals(eq), lag = p + 4, 
+                           type = "Ljung-Box", fitdf = p)$p.value
+  }
+  # results table for display
+  Stats <- cbind(sprintf("%.4f", LBp),
+                 sprintf("%.2f", AICc),
+                 replace(rep("", pmax + 1), which.min(AICc), "<="))
+  rownames(Stats) <- paste0("p=", 0:pmax); colnames(Stats) <- c("LBp", "AICc", "minAICc")
+  cat("\n", label, "\n", sep = ""); print(Stats, quote = FALSE)
 
-  # Ljung–Box lag: min(8, n/5)
-  lb_lag <- min(8, floor(n/5))
-
-  # fit AR(p) with exogenous regressors for p = 0..p_max
-  grid <- map_dfr(0:p_max, function(p) {
-    fit <- Arima(
-      y, order = c(p, 0, 0),
-      xreg = X,
-      include.mean = FALSE,
-      method = "ML"
-    )
-    tibble(
-      p    = p,
-      AIC  = fit$aic,
-      BIC  = fit$bic,
-      AICc = fit$aicc,
-      fit  = list(fit)
-    )
-  })
-
-  # pick best lag by AICc
-  best   <- grid %>% slice_min(AICc, with_ties = FALSE)
-  best_p <- best$p
-  best_f <- best$fit[[1]]
-
-  # Ljung–Box test
-  lb <- Box.test(residuals(best_f), type = "Ljung-Box",
-                 lag = lb_lag, fitdf = best_p)
-
-  tibble(
-    model   = deparse(formula),
-    best_p  = best_p,
-    lb_pval = unname(lb$p.value)
-  )
+  # return summary row for this model
+  data.frame(model = label, p = which.min(AICc) - 1,
+             AICc = min(AICc), LB_p = LBp[which.min(AICc)])
 }
 
-# Example usage
-linear     <- value ~ time
-one_break <- value ~ time + du_1 + dt_1
-two_break <- value ~ time + du_1 + dt_1 + du_2 + dt_2
+# Run for all models 
+models <- list(linear_model, one_break_model, two_break_model)    # model objects
+names(models) <- c("linear_model", "one_break_model", "two_break_model")  # add labels
 
-ar_summary <- bind_rows(
-  select_ar_summary(linear, data),
-  select_ar_summary(one_break, data),
-  select_ar_summary(two_break, data)
-) %>%
-  mutate(model = c("linear", "one break", "two breaks"))
-
-print(ar_summary)
+# combine results into final dataframe
+final <- do.call(rbind, Map(function(m, lab) resid_ar_table(m, lab, pmax = 9),
+                            models, names(models)))
+print(final)
 
 ```
 
 
-### b) 
+### (b) 
 
 ```{r q2b}
 
+# models, labels, and max lags (linear=4, others=5)
+models <- list(linear_model, one_break_model, two_break_model)
+labels <- c("linear_model","one_break_model","two_break_model")
+lags   <- c(5,4,4)
 
-# 1. Collect residuals from the three models
-Z_data <- tibble(
-  date      = data$date,
-  linear     = residuals(linear_model),
-  one_break = residuals(one_break_model),
-  two_break = residuals(two_break_model)
-) %>%
-  pivot_longer(-date, names_to = "model", values_to = "residual")
+# compact ADF on residuals -> selected lag, t-stat, p-value (via punitroot)
+adf_rows <- t(mapply(function(m, L) {
+  adf  <- ur.df(resid(m), type="drift", selectlags="AIC", lags=L)
+  tval <- as.numeric(adf@teststat[1])                # tau2 for 'drift'
+  pval <- urca::punitroot(tval, trend="c", statistic="t")
+  c(lag = adf@lags, t_stat = tval, p_value = pval)
+}, models, lags, SIMPLIFY = TRUE))
 
-# 3. ADF test function with lag selection by AIC, max 5
-get_adf <- function(z, model_name, max_lags = 5) {
-  test <- ur.df(z, type = "none", lags = max_lags, selectlags = "AIC")
-  tau  <- test@teststat[1]
-  cv   <- test@cval[1, ]
-  
-  tibble(
-    model        = model_name,
-    best_lag_AIC = test@lags,   # reports chosen lag order
-    tau_stat     = tau,
-    cv_1pct      = cv["1pct"],
-    cv_5pct      = cv["5pct"],
-    cv_10pct     = cv["10pct"]
-  )
-}
-
-# 4. Apply to all three models
-adf_table <- bind_rows(
-  get_adf(residuals(linear_model), "linear"),
-  get_adf(residuals(one_break_model), "one break"),
-  get_adf(residuals(two_break_model), "two breaks")
-)
-
-print(adf_table)
-
-
+adf_results <- data.frame(model = labels, adf_rows, row.names = NULL)
+print(adf_results)
 
 ```
 
@@ -321,47 +171,23 @@ print(adf_table)
 
 ```{r q2c}
 
+# Sample sizes of residuals
+n_vec <- sapply(models, function(m) length(resid(m)))
 
-# Collect residuals
-Z <- list(
-  linear      = residuals(linear_model),
-  one_break  = residuals(one_break_model),
-  two_break  = residuals(two_break_model)
-)
-
-# Function: simulate null distribution of ADF tau (type="none")
-simulate_adf_null <- function(n, reps = 1000, max_lags = 5, seed = 123) {
-  set.seed(seed)
-  taus <- numeric(reps)
-  for (r in seq_len(reps)) {
-    # Generate unit root process under H0
-    e <- rnorm(n)
-    z <- cumsum(e)
-    # ADF test with lag selection by AIC (0..max_lags)
-    test <- ur.df(z, type = "none", lags = max_lags, selectlags = "AIC")
-    taus[r] <- test@teststat[1]
-  }
-  taus
+# Simulate null distributions and store 5% critical values
+reps <- 1000
+tstats_list <- vector("list", length(models))
+cv5 <- numeric(length(models))
+for(i in seq_along(models)){
+  tstats <- replicate(reps, {
+    y <- cumsum(rnorm(n_vec[i]))                                # random walk under H0
+    as.numeric(ur.df(y, type="drift", selectlags="AIC", lags=lags[i])@teststat[1])  # tau2
+  })
+  tstats_list[[i]] <- tstats
+  cv5[i] <- unname(quantile(tstats, 0.05, na.rm = TRUE))        # 5% critical value
 }
 
-# Simulation per model
-reps <- 1000
-max_lags <- 5
-
-cv_table <- tibble(
-  model = names(Z),
-  n     = map_int(Z, length),
-  tau_actual = map_dbl(Z, ~ {
-    test <- ur.df(.x, type = "none", lags = max_lags, selectlags = "AIC")
-    test@teststat[1]
-  }),
-  cv5_simulated = map2_dbl(map_int(Z, length), names(Z), ~ {
-    taus <- simulate_adf_null(.x, reps = reps, max_lags = max_lags)
-    quantile(taus, probs = 0.05, na.rm = TRUE)
-  })
-) %>%
-  mutate(reject_5pct = tau_actual < cv5_simulated)
-
+cv_table <- data.frame(model = labels, Lmax = lags, cv_5pct = cv5)
 print(cv_table)
 
 ```
@@ -370,48 +196,23 @@ print(cv_table)
 
 ```{r q2d}
 
-# Function: compute observed ADF tau for a given series
-adf_tau_actual <- function(series, max_lags) {
-  test <- ur.df(series, type = "none", lags = max_lags, selectlags = "AIC")
-  unname(test@teststat[1])
+# Observed ADF t statistics on residuals (drift, AIC, same lag caps)
+obs_t <- numeric(length(models))
+for(i in seq_along(models)){
+  adf <- ur.df(resid(models[[i]]), type="drift", selectlags="AIC", lags=lags[i])
+  obs_t[i] <- as.numeric(adf@teststat[1])
 }
 
-# Function: simulate null distribution of ADF tau under unit root
-simulate_adf_null <- function(n, reps, max_lags, seed = 123) {
-  set.seed(seed + n)
-  taus <- numeric(reps)
-  for (r in seq_len(reps)) {
-    z <- cumsum(rnorm(n))  # random walk under H0
-    test <- ur.df(z, type = "none", lags = max_lags, selectlags = "AIC")
-    taus[r] <- unname(test@teststat[1])
-  }
-  taus
+# Simulated p-values using the saved null draws in tstats_list
+pvals <- numeric(length(models))
+for(i in seq_along(models)){
+  tsim <- tstats_list[[i]]
+  pvals[i] <- mean(tsim <= obs_t[i])   # left-tail probability under H0
 }
 
-# Function: empirical left-tail p-value
-emp_pval <- function(tau_obs, taus_null) {
-  (sum(taus_null <= tau_obs) + 1) / (length(taus_null) + 1)
-}
-
-# Compute observed tau and simulated p-value for each model
-pval_tbl <- tibble(
-  model   = c("linear", "one break", "two breaks"),
-  resid   = list(
-    residuals(linear_model),
-    residuals(one_break_model),
-    residuals(two_break_model)
-  )
-) %>%
-  mutate(
-    n        = map_int(resid, length),
-    tau_obs  = map_dbl(resid, ~ adf_tau_actual(.x, max_lags)),
-    taus_sim = map(n, ~ simulate_adf_null(.x, reps = reps, max_lags = max_lags)),
-    p_value  = map2_dbl(tau_obs, taus_sim, emp_pval)
-  ) %>%
-  select(model, n, tau_obs, p_value)
-
-print(pval_tbl)
-
+# Table of simulated p-values
+p_table <- data.frame(model = labels, t_stat = obs_t, p_sim = pvals)
+print(p_table)
 
 ```
 

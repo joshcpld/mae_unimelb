@@ -362,13 +362,28 @@ display: none;
 # library(tidyverse)
 # library(lubridate)
 # library(forecast)
-# library(urca)</code></pre>
+# library(urca)
+#library(car)</code></pre>
 <div id="question-1" class="section level1">
 <h1>Question 1</h1>
-<pre class="r"><code>data &lt;- read_csv(&quot;usrealgdppercapita.csv&quot;) %&gt;% 
+</div>
+<div id="a---c" class="section level1">
+<h1>(a) - (c)</h1>
+<pre class="r"><code># Question 1
+
+# For code efficiency, answers to Q1a-Q1c are all given together below
+
+# Data import and cleaning
+
+data &lt;- read_csv(&quot;USRealGDPPerCapita.csv&quot;) %&gt;% 
   select(date = observation_date, value = RealGDPPerCap) %&gt;% 
   mutate(date = dmy(date)) %&gt;% 
-  na.omit()</code></pre>
+  mutate(value = log(value)) %&gt;% 
+  na.omit() %&gt;%
+  # Variables for models
+  mutate(time = row_number()*0.25) %&gt;% 
+  mutate(du_1 = if_else(lubridate::year(date) &gt; 1973, 1, 0), dt_1 = if_else(year(date) &gt; 1973, time, 0)) %&gt;% 
+  mutate(du_2 = if_else(lubridate::year(date) &gt; 2008, 1, 0), dt_2 = if_else(year(date) &gt; 2008, time, 0))</code></pre>
 <pre><code>## Rows: 314 Columns: 2
 ## ── Column specification ────────────────────────────────────────────────────────
 ## Delimiter: &quot;,&quot;
@@ -377,426 +392,228 @@ display: none;
 ## 
 ## ℹ Use `spec()` to retrieve the full column specification for this data.
 ## ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.</code></pre>
-<div id="a" class="section level2">
-<h2>(a)</h2>
-<pre class="r"><code>data &lt;- data %&gt;% 
-  mutate(time = row_number()*0.25)
+<pre class="r"><code># Creating models
 
 linear_model &lt;- lm(value ~ time, data = data)
-
-summary(linear_model)</code></pre>
-<pre><code>## 
-## Call:
-## lm(formula = value ~ time, data = data)
-## 
-## Residuals:
-##     Min      1Q  Median      3Q     Max 
-## -4260.7 -1333.1  -363.7  1395.9  4018.7 
-## 
-## Coefficients:
-##              Estimate Std. Error t value Pr(&gt;|t|)    
-## (Intercept) 11058.927    207.357   53.33   &lt;2e-16 ***
-## time          681.632      4.907  138.90   &lt;2e-16 ***
-## ---
-## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
-## 
-## Residual standard error: 1767 on 290 degrees of freedom
-## Multiple R-squared:  0.9852, Adjusted R-squared:  0.9851 
-## F-statistic: 1.929e+04 on 1 and 290 DF,  p-value: &lt; 2.2e-16</code></pre>
-<pre class="r"><code>linear_model_data &lt;- tibble(
-  date       = data$date,
-  value      = data$value,
-  fitted     = fitted(linear_model),
-  residuals  = resid(linear_model)
-)
-
-c1 &lt;- ggplot(linear_model_data, aes(x = date, y = value)) +
-  geom_line() +
-  geom_line(aes(y = fitted), color = &quot;red&quot;, linewidth = 1) +
-  labs(
-    title = &quot;Chart 1: Linear \n model fitted values&quot;,
-    y = &quot;value&quot;,
-    x = &quot;date&quot;
-  ) 
-
-c2 &lt;- ggplot(linear_model_data, aes(x = date, y = residuals)) +
-  geom_line() +
-  geom_hline(yintercept = 0, linetype = &quot;dashed&quot;) +
-  labs(
-    title = &quot;Chart 2: Linear \n model residuals&quot;,
-    y = &quot;residuals&quot;,
-    x = &quot;date&quot;
-  ) +
-  theme(plot.title = element_text(hjust = 0.5))
-
-ggsave(&quot;chart1.png&quot;, c1, width = 3, height = 2.5, units = &quot;in&quot;, dpi = 300)
-ggsave(&quot;chart2.png&quot;, c2, width = 3, height = 2.5, units = &quot;in&quot;, dpi = 300)</code></pre>
-</div>
-<div id="b" class="section level2">
-<h2>(b)</h2>
-<pre class="r"><code>data &lt;- data %&gt;% 
-  mutate(
-    du_1 = if_else(lubridate::year(date) &gt; 1973, 1, 0),
-    dt_1 = if_else(lubridate::year(date) &gt; 1973, time, 0)
-  )
-
-
 one_break_model &lt;- lm(value ~ time + du_1 + dt_1, data = data)
-
-summary(one_break_model)</code></pre>
-<pre><code>## 
-## Call:
-## lm(formula = value ~ time + du_1 + dt_1, data = data)
-## 
-## Residuals:
-##      Min       1Q   Median       3Q      Max 
-## -2728.79 -1007.82   -39.05   772.43  2916.44 
-## 
-## Coefficients:
-##             Estimate Std. Error t value Pr(&gt;|t|)    
-## (Intercept) 13976.63     225.96   61.85   &lt;2e-16 ***
-## time          499.75      14.40   34.72   &lt;2e-16 ***
-## du_1        -7696.30     404.64  -19.02   &lt;2e-16 ***
-## dt_1          272.07      15.78   17.24   &lt;2e-16 ***
-## ---
-## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
-## 
-## Residual standard error: 1166 on 288 degrees of freedom
-## Multiple R-squared:  0.9936, Adjusted R-squared:  0.9935 
-## F-statistic: 1.49e+04 on 3 and 288 DF,  p-value: &lt; 2.2e-16</code></pre>
-<pre class="r"><code>one_break_model_data &lt;- tibble(
-  date      = data$date,
-  value     = data$value,
-  fitted    = fitted(one_break_model),
-  residuals = resid(one_break_model)
-)
-
-
-c3 &lt;- ggplot(one_break_model_data, aes(x = date, y = value)) +
-  geom_line() +
-  geom_line(aes(y = fitted), color = &quot;red&quot;, linewidth = 1) +
-  labs(
-    title = &quot;Chart 3: One break model \n fitted values&quot;,
-    y = &quot;y value&quot;,
-    x = &quot;date&quot;
-  ) +
-  theme(plot.title = element_text(hjust = 0.5))
-
-# Chart 4
-c4 &lt;- ggplot(one_break_model_data, aes(x = date, y = residuals)) +
-  geom_line() +
-  geom_hline(yintercept = 0, linetype = &quot;dashed&quot;) +
-  labs(
-    title = &quot;Chart 4: One break model \n residuals&quot;,
-    y = &quot;residuals&quot;,
-    x = &quot;date&quot;
-  ) +
-  theme(plot.title = element_text(hjust = 0.5))
-
-ggsave(&quot;chart3.png&quot;, c3, width = 3, height = 2.5, units = &quot;in&quot;, dpi = 300)
-ggsave(&quot;chart4.png&quot;, c4, width = 3, height = 2.5, units = &quot;in&quot;, dpi = 300)</code></pre>
-</div>
-<div id="c" class="section level2">
-<h2>(c)</h2>
-<pre class="r"><code>data &lt;- data %&gt;% 
-  mutate(
-    du_2 = if_else(lubridate::year(date) &gt; 2008, 1, 0),
-    dt_2 = if_else(lubridate::year(date) &gt; 2008, time, 0)
-  )
-
 two_break_model &lt;- lm(value ~ time + du_1 + dt_1 + du_2 + dt_2, data = data)
-summary(two_break_model)</code></pre>
-<pre><code>## 
-## Call:
-## lm(formula = value ~ time + du_1 + dt_1 + du_2 + dt_2, data = data)
-## 
-## Residuals:
-##     Min      1Q  Median      3Q     Max 
-## -2471.8  -493.8    99.8   729.1  2131.9 
-## 
-## Coefficients:
-##              Estimate Std. Error t value Pr(&gt;|t|)    
-## (Intercept)  13976.63     184.64  75.698  &lt; 2e-16 ***
-## time           499.75      11.76  42.486  &lt; 2e-16 ***
-## du_1        -10344.95     408.73 -25.310  &lt; 2e-16 ***
-## dt_1           338.50      14.21  23.824  &lt; 2e-16 ***
-## du_2         -8725.12    3084.61  -2.829  0.00501 ** 
-## dt_2            86.89      45.94   1.891  0.05959 .  
-## ---
-## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
-## 
-## Residual standard error: 952.7 on 286 degrees of freedom
-## Multiple R-squared:  0.9958, Adjusted R-squared:  0.9957 
-## F-statistic: 1.342e+04 on 5 and 286 DF,  p-value: &lt; 2.2e-16</code></pre>
-<pre class="r"><code>two_break_model_data &lt;- tibble(
-  date      = data$date,
-  value     = data$value,
-  fitted    = fitted(two_break_model),
-  residuals = resid(two_break_model)
+
+# Creating table of coefficients
+
+tab &lt;- cbind(
+  &quot;Linear model (a)&quot;  = coef(linear_model)[c(&quot;(Intercept)&quot;,&quot;time&quot;,&quot;du_1&quot;,&quot;dt_1&quot;,&quot;du_2&quot;,&quot;dt_2&quot;)],
+  &quot;1 break model (b)&quot; = coef(one_break_model)[c(&quot;(Intercept)&quot;,&quot;time&quot;,&quot;du_1&quot;,&quot;dt_1&quot;,&quot;du_2&quot;,&quot;dt_2&quot;)],
+  &quot;2 break model (c)&quot; = coef(two_break_model)[c(&quot;(Intercept)&quot;,&quot;time&quot;,&quot;du_1&quot;,&quot;dt_1&quot;,&quot;du_2&quot;,&quot;dt_2&quot;)]
 )
 
-# Chart 5
-c5 &lt;- ggplot(two_break_model_data, aes(x = date, y = value)) +
-  geom_line() +
-  geom_line(aes(y = fitted), color = &quot;red&quot;, linewidth = 1) +
-  labs(
-    title = &quot;Chart 5: Two break model \n fitted values&quot;,
-    y = &quot;value&quot;,
-    x = &quot;date&quot;
-  ) +
-  theme(plot.title = element_text(hjust = 0.5))
+rownames(tab) &lt;- c(&quot;beta_0&quot;,&quot;beta_1&quot;, &quot;beta_3&quot;,&quot;beta_4&quot;,&quot;beta_5&quot;,&quot;beta_6&quot;)
+round(tab, 4)</code></pre>
+<pre><code>##        Linear model (a) 1 break model (b) 2 break model (c)
+## beta_0           9.6621            9.5985            9.5985
+## beta_1           0.0203            0.0239            0.0239
+## beta_3               NA            0.1950            0.0798
+## beta_4               NA           -0.0061           -0.0032
+## beta_5               NA                NA            0.1942
+## beta_6               NA                NA           -0.0046</code></pre>
+<pre class="r"><code># Creating charts of fitted values and residuals
 
-# Chart 6
-c6 &lt;- ggplot(two_break_model_data, aes(x = date, y = residuals)) +
-  geom_line() +
-  geom_hline(yintercept = 0, linetype = &quot;dashed&quot;) +
-  labs(
-    title = &quot;Chart 6: Two break model \n residuals&quot;,
-    y = &quot;residuals&quot;,
-    x = &quot;date&quot;
-  ) +
-  theme(plot.title = element_text(hjust = 0.5))
+models &lt;- list(linear_model, one_break_model, two_break_model)
+labs &lt;- c(&quot;Linear model&quot;, &quot;One-break model&quot;, &quot;Two-break model&quot;)
 
-ggsave(&quot;chart5.png&quot;, c5, width = 3, height = 2.5, units = &quot;in&quot;, dpi = 300)
-ggsave(&quot;chart6.png&quot;, c6, width = 3, height = 2.5, units = &quot;in&quot;, dpi = 300)</code></pre>
-</div>
+invisible(lapply(seq_along(models), function(i){
+  m &lt;- models[[i]]; lab &lt;- labs[i]
+  aug &lt;- data.frame(date = data$date, value = data$value, fitted = fitted(m), residuals = resid(m))
+  p1 &lt;- ggplot(aug, aes(date, value)) + geom_line() + geom_line(aes(y = fitted), color = &quot;red&quot;, linewidth = 1) +
+        labs(title = paste0(&quot;Chart &quot;, (i-1)*2+1, &quot;: &quot;, lab, &quot; \n fitted values&quot;), x = &quot;date&quot;, y = &quot;value&quot;)
+  p2 &lt;- ggplot(aug, aes(date, residuals)) + geom_line() + geom_hline(yintercept = 0, linetype = &quot;dashed&quot;) +
+        labs(title = paste0(&quot;Chart &quot;, (i-1)*2+2, &quot;: &quot;, lab, &quot; \n residuals&quot;), x = &quot;date&quot;, y = &quot;residuals&quot;)
+  ggsave(paste0(&quot;chart&quot;, (i-1)*2+1, &quot;.png&quot;), p1, width = 3, height = 2.5, units = &quot;in&quot;, dpi = 300)
+  ggsave(paste0(&quot;chart&quot;, (i-1)*2+2, &quot;.png&quot;), p2, width = 3, height = 2.5, units = &quot;in&quot;, dpi = 300)
+}))</code></pre>
 <div id="d-written-answers-only-except-for-iii" class="section level2">
 <h2>(d) WRITTEN ANSWERS ONLY EXCEPT FOR III</h2>
 <div id="iii" class="section level3">
 <h3>(iii)</h3>
-<pre class="r"><code># We see if Perron&#39;s imposition of continuity is supported at 1973 and 2008 by applying a Wald test to see if the implied jump in the fitted value at each breakpoint is significantly different from zero.
+<pre class="r"><code># We see if Perron&#39;s imposition of continuity is supported at 1973 and 2008 by applying a linear hypothesis test to see if the implied jump in the fitted value at each breakpoint is significantly different from zero.
 
-b &lt;- coef(two_break_model)
-V &lt;- vcov(two_break_model)
-
-# Jump at 1973
-J73_hat &lt;- b[&quot;du_1&quot;] + 1973 * b[&quot;dt_1&quot;]
-se_J73  &lt;- sqrt(c(1,1973) %*% V[c(&quot;du_1&quot;,&quot;dt_1&quot;), c(&quot;du_1&quot;,&quot;dt_1&quot;)] %*% c(1,1973))
-t_J73   &lt;- J73_hat / se_J73
-p_J73   &lt;- 2 * (1 - pnorm(abs(t_J73)))   # two-sided p-value
-
-# Jump at 2008
-J08_hat &lt;- b[&quot;du_2&quot;] + 2008 * b[&quot;dt_2&quot;]
-se_J08  &lt;- sqrt(c(1,2008) %*% V[c(&quot;du_2&quot;,&quot;dt_2&quot;), c(&quot;du_2&quot;,&quot;dt_2&quot;)] %*% c(1,2008))
-t_J08   &lt;- J08_hat / se_J08
-p_J08   &lt;- 2 * (1 - pnorm(abs(t_J08)))
-
-# Print results
-print(p_J73)</code></pre>
-<pre><code>##      [,1]
-## [1,]    0</code></pre>
-<pre class="r"><code>print(p_J08)</code></pre>
-<pre><code>##            [,1]
-## [1,] 0.06306952</code></pre>
+# H0: no jump at 1973
+linearHypothesis(two_break_model, &quot;du_1 + 1973*dt_1 = 0&quot;)</code></pre>
+<pre><code>## 
+## Linear hypothesis test:
+## du_1  + 1973 dt_1 = 0
+## 
+## Model 1: restricted model
+## Model 2: value ~ time + du_1 + dt_1 + du_2 + dt_2
+## 
+##   Res.Df     RSS Df Sum of Sq      F    Pr(&gt;F)    
+## 1    287 0.25257                                  
+## 2    286 0.20610  1  0.046469 64.484 2.555e-14 ***
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1</code></pre>
+<pre class="r"><code># H0: no jump at 2008
+linearHypothesis(two_break_model, &quot;du_2 + 2008*dt_2 = 0&quot;)</code></pre>
+<pre><code>## 
+## Linear hypothesis test:
+## du_2  + 2008 dt_2 = 0
+## 
+## Model 1: restricted model
+## Model 2: value ~ time + du_1 + dt_1 + du_2 + dt_2
+## 
+##   Res.Df     RSS Df Sum of Sq      F    Pr(&gt;F)    
+## 1    287 0.21551                                  
+## 2    286 0.20610  1 0.0094024 13.047 0.0003586 ***
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1</code></pre>
 </div>
 </div>
 </div>
 <div id="question-2" class="section level1">
 <h1>Question 2</h1>
-<div id="a-1" class="section level3">
+<div id="a" class="section level3">
 <h3>(a)</h3>
-<pre class="r"><code>select_ar_summary &lt;- function(formula, data, p_max = 8) {
-  y  &lt;- data$value
-  X  &lt;- model.matrix(formula, data = data)
-  n  &lt;- length(y)
-
-  # Ljung–Box lag: min(8, n/5)
-  lb_lag &lt;- min(8, floor(n/5))
-
-  # fit AR(p) with exogenous regressors for p = 0..p_max
-  grid &lt;- map_dfr(0:p_max, function(p) {
-    fit &lt;- Arima(
-      y, order = c(p, 0, 0),
-      xreg = X,
-      include.mean = FALSE,
-      method = &quot;ML&quot;
-    )
-    tibble(
-      p    = p,
-      AIC  = fit$aic,
-      BIC  = fit$bic,
-      AICc = fit$aicc,
-      fit  = list(fit)
-    )
-  })
-
-  # pick best lag by AICc
-  best   &lt;- grid %&gt;% slice_min(AICc, with_ties = FALSE)
-  best_p &lt;- best$p
-  best_f &lt;- best$fit[[1]]
-
-  # Ljung–Box test
-  lb &lt;- Box.test(residuals(best_f), type = &quot;Ljung-Box&quot;,
-                 lag = lb_lag, fitdf = best_p)
-
-  tibble(
-    model   = deparse(formula),
-    best_p  = best_p,
-    lb_pval = unname(lb$p.value)
-  )
-}
-
-# Example usage
-linear     &lt;- value ~ time
-one_break &lt;- value ~ time + du_1 + dt_1
-two_break &lt;- value ~ time + du_1 + dt_1 + du_2 + dt_2
-
-ar_summary &lt;- bind_rows(
-  select_ar_summary(linear, data),
-  select_ar_summary(one_break, data),
-  select_ar_summary(two_break, data)
-) %&gt;%
-  mutate(model = c(&quot;linear&quot;, &quot;one break&quot;, &quot;two breaks&quot;))
-
-print(ar_summary)</code></pre>
-<pre><code>## # A tibble: 3 × 3
-##   model      best_p lb_pval
-##   &lt;chr&gt;       &lt;int&gt;   &lt;dbl&gt;
-## 1 linear          3   0.220
-## 2 one break       3   0.450
-## 3 two breaks      3   0.351</code></pre>
-</div>
-<div id="b-1" class="section level3">
-<h3>b)</h3>
-<pre class="r"><code># 1. Collect residuals from the three models
-Z_data &lt;- tibble(
-  date      = data$date,
-  linear     = residuals(linear_model),
-  one_break = residuals(one_break_model),
-  two_break = residuals(two_break_model)
-) %&gt;%
-  pivot_longer(-date, names_to = &quot;model&quot;, values_to = &quot;residual&quot;)
-
-# 3. ADF test function with lag selection by AIC, max 5
-get_adf &lt;- function(z, model_name, max_lags = 5) {
-  test &lt;- ur.df(z, type = &quot;none&quot;, lags = max_lags, selectlags = &quot;AIC&quot;)
-  tau  &lt;- test@teststat[1]
-  cv   &lt;- test@cval[1, ]
-  
-  tibble(
-    model        = model_name,
-    best_lag_AIC = test@lags,   # reports chosen lag order
-    tau_stat     = tau,
-    cv_1pct      = cv[&quot;1pct&quot;],
-    cv_5pct      = cv[&quot;5pct&quot;],
-    cv_10pct     = cv[&quot;10pct&quot;]
-  )
-}
-
-# 4. Apply to all three models
-adf_table &lt;- bind_rows(
-  get_adf(residuals(linear_model), &quot;linear&quot;),
-  get_adf(residuals(one_break_model), &quot;one break&quot;),
-  get_adf(residuals(two_break_model), &quot;two breaks&quot;)
-)
-
-print(adf_table)</code></pre>
-<pre><code>## # A tibble: 3 × 6
-##   model      best_lag_AIC tau_stat cv_1pct cv_5pct cv_10pct
-##   &lt;chr&gt;             &lt;int&gt;    &lt;dbl&gt;   &lt;dbl&gt;   &lt;dbl&gt;    &lt;dbl&gt;
-## 1 linear                5    -2.54   -2.58   -1.95    -1.62
-## 2 one break             5    -3.45   -2.58   -1.95    -1.62
-## 3 two breaks            5    -3.55   -2.58   -1.95    -1.62</code></pre>
-</div>
-<div id="c-1" class="section level2">
-<h2>(c)</h2>
-<pre class="r"><code># Collect residuals
-Z &lt;- list(
-  linear      = residuals(linear_model),
-  one_break  = residuals(one_break_model),
-  two_break  = residuals(two_break_model)
-)
-
-# Function: simulate null distribution of ADF tau (type=&quot;none&quot;)
-simulate_adf_null &lt;- function(n, reps = 1000, max_lags = 5, seed = 123) {
-  set.seed(seed)
-  taus &lt;- numeric(reps)
-  for (r in seq_len(reps)) {
-    # Generate unit root process under H0
-    e &lt;- rnorm(n)
-    z &lt;- cumsum(e)
-    # ADF test with lag selection by AIC (0..max_lags)
-    test &lt;- ur.df(z, type = &quot;none&quot;, lags = max_lags, selectlags = &quot;AIC&quot;)
-    taus[r] &lt;- test@teststat[1]
+<pre class="r"><code># function: fit AR(p) to residuals (Z), compute AICc &amp; Ljung–Box, mark min AICc
+resid_ar_table &lt;- function(model, label, pmax = 9) {
+  Z &lt;- resid(model); AICc &lt;- LBp &lt;- numeric(pmax + 1)          # storage
+  for (p in 0:pmax) {                                          # loop over AR orders
+    eq &lt;- Arima(Z, order = c(p, 0, 0), include.mean = FALSE, method = &quot;ML&quot;)
+    AICc[p + 1] &lt;- eq$aicc                                    # record AICc
+    LBp[p + 1] &lt;- Box.test(residuals(eq), lag = p + 4, 
+                           type = &quot;Ljung-Box&quot;, fitdf = p)$p.value
   }
-  taus
+  # results table for display
+  Stats &lt;- cbind(sprintf(&quot;%.4f&quot;, LBp),
+                 sprintf(&quot;%.2f&quot;, AICc),
+                 replace(rep(&quot;&quot;, pmax + 1), which.min(AICc), &quot;&lt;=&quot;))
+  rownames(Stats) &lt;- paste0(&quot;p=&quot;, 0:pmax); colnames(Stats) &lt;- c(&quot;LBp&quot;, &quot;AICc&quot;, &quot;minAICc&quot;)
+  cat(&quot;\n&quot;, label, &quot;\n&quot;, sep = &quot;&quot;); print(Stats, quote = FALSE)
+
+  # return summary row for this model
+  data.frame(model = label, p = which.min(AICc) - 1,
+             AICc = min(AICc), LB_p = LBp[which.min(AICc)])
 }
 
-# Simulation per model
+# Run for all models 
+models &lt;- list(linear_model, one_break_model, two_break_model)    # model objects
+names(models) &lt;- c(&quot;linear_model&quot;, &quot;one_break_model&quot;, &quot;two_break_model&quot;)  # add labels
+
+# combine results into final dataframe
+final &lt;- do.call(rbind, Map(function(m, lab) resid_ar_table(m, lab, pmax = 9),
+                            models, names(models)))</code></pre>
+<pre><code>## 
+## linear_model
+##     LBp    AICc     minAICc
+## p=0 0.0000 -918.05         
+## p=1 0.0000 -1901.17        
+## p=2 0.0189 -1940.88        
+## p=3 0.1560 -1943.53        
+## p=4 0.3216 -1944.40 &lt;=     
+## p=5 0.2697 -1943.42        
+## p=6 0.1747 -1942.89        
+## p=7 0.1682 -1942.22        
+## p=8 0.0220 -1940.11        
+## p=9 0.0131 -1937.97        
+## 
+## one_break_model
+##     LBp    AICc     minAICc
+## p=0 0.0000 -1083.40        
+## p=1 0.0000 -1883.51        
+## p=2 0.0070 -1921.47        
+## p=3 0.3396 -1928.41 &lt;=     
+## p=4 0.2789 -1928.33        
+## p=5 0.1224 -1927.16        
+## p=6 0.0361 -1926.26        
+## p=7 0.0275 -1925.57        
+## p=8 0.0021 -1923.45        
+## p=9 0.0019 -1921.34        
+## 
+## two_break_model
+##     LBp    AICc     minAICc
+## p=0 0.0000 -1288.12        
+## p=1 0.0002 -1859.06        
+## p=2 0.1290 -1870.88        
+## p=3 0.6157 -1875.43 &lt;=     
+## p=4 0.6856 -1873.70        
+## p=5 0.4674 -1872.68        
+## p=6 0.4359 -1870.85        
+## p=7 0.4102 -1869.76        
+## p=8 0.3708 -1867.80        
+## p=9 0.2141 -1865.66</code></pre>
+<pre class="r"><code>print(final)</code></pre>
+<pre><code>##                           model p      AICc      LB_p
+## linear_model       linear_model 4 -1944.400 0.3216290
+## one_break_model one_break_model 3 -1928.413 0.3395979
+## two_break_model two_break_model 3 -1875.432 0.6157181</code></pre>
+</div>
+<div id="b" class="section level3">
+<h3>(b)</h3>
+<pre class="r"><code># models, labels, and max lags (linear=4, others=5)
+models &lt;- list(linear_model, one_break_model, two_break_model)
+labels &lt;- c(&quot;linear_model&quot;,&quot;one_break_model&quot;,&quot;two_break_model&quot;)
+lags   &lt;- c(5,4,4)
+
+# compact ADF on residuals -&gt; selected lag, t-stat, p-value (via punitroot)
+adf_rows &lt;- t(mapply(function(m, L) {
+  adf  &lt;- ur.df(resid(m), type=&quot;drift&quot;, selectlags=&quot;AIC&quot;, lags=L)
+  tval &lt;- as.numeric(adf@teststat[1])                # tau2 for &#39;drift&#39;
+  pval &lt;- urca::punitroot(tval, trend=&quot;c&quot;, statistic=&quot;t&quot;)
+  c(lag = adf@lags, t_stat = tval, p_value = pval)
+}, models, lags, SIMPLIFY = TRUE))
+
+adf_results &lt;- data.frame(model = labels, adf_rows, row.names = NULL)
+print(adf_results)</code></pre>
+<pre><code>##             model lag    t_stat      p_value
+## 1    linear_model   5 -2.043243 0.2683461322
+## 2 one_break_model   4 -3.559110 0.0066192486
+## 3 two_break_model   4 -4.516266 0.0001789811</code></pre>
+</div>
+<div id="c" class="section level2">
+<h2>(c)</h2>
+<pre class="r"><code># Sample sizes of residuals
+n_vec &lt;- sapply(models, function(m) length(resid(m)))
+
+# Simulate null distributions and store 5% critical values
 reps &lt;- 1000
-max_lags &lt;- 5
-
-cv_table &lt;- tibble(
-  model = names(Z),
-  n     = map_int(Z, length),
-  tau_actual = map_dbl(Z, ~ {
-    test &lt;- ur.df(.x, type = &quot;none&quot;, lags = max_lags, selectlags = &quot;AIC&quot;)
-    test@teststat[1]
-  }),
-  cv5_simulated = map2_dbl(map_int(Z, length), names(Z), ~ {
-    taus &lt;- simulate_adf_null(.x, reps = reps, max_lags = max_lags)
-    quantile(taus, probs = 0.05, na.rm = TRUE)
+tstats_list &lt;- vector(&quot;list&quot;, length(models))
+cv5 &lt;- numeric(length(models))
+for(i in seq_along(models)){
+  tstats &lt;- replicate(reps, {
+    y &lt;- cumsum(rnorm(n_vec[i]))                                # random walk under H0
+    as.numeric(ur.df(y, type=&quot;drift&quot;, selectlags=&quot;AIC&quot;, lags=lags[i])@teststat[1])  # tau2
   })
-) %&gt;%
-  mutate(reject_5pct = tau_actual &lt; cv5_simulated)
+  tstats_list[[i]] &lt;- tstats
+  cv5[i] &lt;- unname(quantile(tstats, 0.05, na.rm = TRUE))        # 5% critical value
+}
 
+cv_table &lt;- data.frame(model = labels, Lmax = lags, cv_5pct = cv5)
 print(cv_table)</code></pre>
-<pre><code>## # A tibble: 3 × 5
-##   model         n tau_actual cv5_simulated reject_5pct
-##   &lt;chr&gt;     &lt;int&gt;      &lt;dbl&gt;         &lt;dbl&gt; &lt;lgl&gt;      
-## 1 linear      292      -2.54         -1.90 TRUE       
-## 2 one_break   292      -3.45         -1.90 TRUE       
-## 3 two_break   292      -3.55         -1.90 TRUE</code></pre>
+<pre><code>##             model Lmax   cv_5pct
+## 1    linear_model    5 -2.928810
+## 2 one_break_model    4 -2.805158
+## 3 two_break_model    4 -2.872484</code></pre>
 </div>
 <div id="d" class="section level2">
 <h2>(d)</h2>
-<pre class="r"><code># Function: compute observed ADF tau for a given series
-adf_tau_actual &lt;- function(series, max_lags) {
-  test &lt;- ur.df(series, type = &quot;none&quot;, lags = max_lags, selectlags = &quot;AIC&quot;)
-  unname(test@teststat[1])
+<pre class="r"><code># Observed ADF t statistics on residuals (drift, AIC, same lag caps)
+obs_t &lt;- numeric(length(models))
+for(i in seq_along(models)){
+  adf &lt;- ur.df(resid(models[[i]]), type=&quot;drift&quot;, selectlags=&quot;AIC&quot;, lags=lags[i])
+  obs_t[i] &lt;- as.numeric(adf@teststat[1])
 }
 
-# Function: simulate null distribution of ADF tau under unit root
-simulate_adf_null &lt;- function(n, reps, max_lags, seed = 123) {
-  set.seed(seed + n)
-  taus &lt;- numeric(reps)
-  for (r in seq_len(reps)) {
-    z &lt;- cumsum(rnorm(n))  # random walk under H0
-    test &lt;- ur.df(z, type = &quot;none&quot;, lags = max_lags, selectlags = &quot;AIC&quot;)
-    taus[r] &lt;- unname(test@teststat[1])
-  }
-  taus
+# Simulated p-values using the saved null draws in tstats_list
+pvals &lt;- numeric(length(models))
+for(i in seq_along(models)){
+  tsim &lt;- tstats_list[[i]]
+  pvals[i] &lt;- mean(tsim &lt;= obs_t[i])   # left-tail probability under H0
 }
 
-# Function: empirical left-tail p-value
-emp_pval &lt;- function(tau_obs, taus_null) {
-  (sum(taus_null &lt;= tau_obs) + 1) / (length(taus_null) + 1)
-}
-
-# Compute observed tau and simulated p-value for each model
-pval_tbl &lt;- tibble(
-  model   = c(&quot;linear&quot;, &quot;one break&quot;, &quot;two breaks&quot;),
-  resid   = list(
-    residuals(linear_model),
-    residuals(one_break_model),
-    residuals(two_break_model)
-  )
-) %&gt;%
-  mutate(
-    n        = map_int(resid, length),
-    tau_obs  = map_dbl(resid, ~ adf_tau_actual(.x, max_lags)),
-    taus_sim = map(n, ~ simulate_adf_null(.x, reps = reps, max_lags = max_lags)),
-    p_value  = map2_dbl(tau_obs, taus_sim, emp_pval)
-  ) %&gt;%
-  select(model, n, tau_obs, p_value)
-
-print(pval_tbl)</code></pre>
-<pre><code>## # A tibble: 3 × 4
-##   model          n tau_obs p_value
-##   &lt;chr&gt;      &lt;int&gt;   &lt;dbl&gt;   &lt;dbl&gt;
-## 1 linear       292   -2.54 0.00699
-## 2 one break    292   -3.45 0.00300
-## 3 two breaks   292   -3.55 0.00300</code></pre>
+# Table of simulated p-values
+p_table &lt;- data.frame(model = labels, t_stat = obs_t, p_sim = pvals)
+print(p_table)</code></pre>
+<pre><code>##             model    t_stat p_sim
+## 1    linear_model -2.043243 0.285
+## 2 one_break_model -3.559110 0.003
+## 3 two_break_model -4.516266 0.001</code></pre>
 </div>
 <div id="e-written-answers-only" class="section level2">
 <h2>(e) WRITTEN ANSWERS ONLY</h2>
