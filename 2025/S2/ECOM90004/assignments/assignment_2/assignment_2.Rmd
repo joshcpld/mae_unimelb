@@ -9,7 +9,6 @@ date: "`r Sys.Date()`"
 
 library(tidyverse)
 library(lubridate)
-library(janitor)
 library(forecast)
 library(urca)
 
@@ -23,7 +22,6 @@ theme_set(theme_minimal())
 
 # library(tidyverse)
 # library(lubridate)
-# library(janitor)
 # library(forecast)
 # library(urca)
 
@@ -288,17 +286,6 @@ Z_data <- tibble(
   two_break = residuals(two_break_model)
 ) %>%
   pivot_longer(-date, names_to = "model", values_to = "residual")
-
-# 2. Time series plots
-ggplot(Z_data, aes(x = date, y = residual)) +
-  geom_line(colour = "steelblue") +
-  facet_wrap(~model, ncol = 1, scales = "free_y") +
-  geom_hline(yintercept = 0, linetype = "dashed") +
-  labs(
-    title = "Residuals (Z_t) from linear, one-break, and two-break models",
-    x = "date",
-    y = "residual"
-  )
 
 # 3. ADF test function with lag selection by AIC, max 5
 get_adf <- function(z, model_name, max_lags = 5) {
