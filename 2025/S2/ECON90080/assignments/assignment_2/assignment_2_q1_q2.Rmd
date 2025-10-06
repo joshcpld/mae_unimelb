@@ -1,0 +1,270 @@
+---
+title: "ECON90080 - Assignment 2"
+author: "Josh Copeland"
+date: "2025-10-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+library(lubridate)
+library(quantmod)   
+options(getSymbols.warning4.0 = FALSE)
+
+```
+
+```{r setup_comment}
+
+# Libraries used:
+  
+# library(tidyverse)
+# library(lubridate)
+# library(quantmod)   
+
+
+```
+
+# Question 1
+
+### (a) 
+
+Download quarterly data from FRED on real GDP (A191RA3Q086SBEA), real durables consumption (DDURRA3M086SBEA), real non-durable consumption (DNDGRA3M086SBEA) and real services consumption (DSERRA3Q086SBEA) for 1960q1 - 2025q1. Take natural logs of each series and first difference it to make it stationary. Plot how each consumption spending category varies with GDP. State how each series co-moves with GDP.
+
+Answer:
+
+* The chart below shows that:
+
+  - All three categories of consumption move procyclically with GDP growth.
+  - Durables are clearly the most volatile with the largest fluctuations, which blow out particularly during recessions (COVID, GFC, etc).
+  - Services are the most stable of the three consumption components, which nondurables slightly more volatile (far closer to the volatility of services than durables).
+
+ 
+
+```{r rq1a}
+# Map FRED IDs to tidy names
+fred_ids <- tribble(
+  ~id,                  ~series,
+  "A191RA3Q086SBEA",    "GDP (real, Q)",
+  "DDURRA3M086SBEA",    "Consumption: Durables (real, M)",
+  "DNDGRA3M086SBEA",    "Consumption: Nondurables (real, M)",
+  "DSERRA3Q086SBEA",    "Consumption: Services (real, Q)"
+)
+
+# 1) Download all series and stack
+raw_long <- fred_ids$id %>%
+  map_dfr(~{
+    xt <- getSymbols(.x, src = "FRED", auto.assign = FALSE)
+    tibble(date = as.Date(index(xt)), value = as.numeric(xt[,1]), id = .x)
+  }) %>%
+  left_join(fred_ids, by = "id")
+
+# 2) Convert to quarterly (monthly → quarterly mean), then log-diff per series
+g_long <- raw_long %>%
+  mutate(qtr = floor_date(date, "quarter")) %>%
+  group_by(series, qtr) %>%
+  summarize(val_q = mean(value, na.rm = TRUE), .groups = "drop_last") %>%
+  arrange(series, qtr) %>%
+  mutate(g = log(val_q) - lag(log(val_q))) %>%   # quarterly log growth
+  ungroup() %>%
+  filter(qtr >= ymd("1960-01-01"), qtr <= ymd("2025-03-31")) %>%
+  drop_na(g)
+
+# 3) Make a wide table of growth just once (for plotting + stats)
+g_wide <- g_long %>%
+  select(series, qtr, g) %>%
+  pivot_wider(names_from = series, values_from = g) %>%
+  rename(
+    gdp_g   = `GDP (real, Q)`,
+    dur_g   = `Consumption: Durables (real, M)`,
+    nond_g  = `Consumption: Nondurables (real, M)`,
+    serv_g  = `Consumption: Services (real, Q)`
+  )
+
+# 4) Plot: each consumption category vs GDP growth
+plot_df_ts <- g_wide %>%
+  select(qtr, gdp_g, dur_g, nond_g, serv_g) %>%
+  pivot_longer(-qtr, names_to = "series", values_to = "growth") %>%
+  mutate(series = recode(series,
+                         gdp_g  = "GDP",
+                         dur_g  = "Durables",
+                         nond_g = "Nondurables",
+                         serv_g = "Services"))
+
+
+ggplot(plot_df_ts, aes(x = qtr, y = growth, color = series)) +
+  geom_line(linewidth = 0.8) +
+  labs(
+    title = "Chart 1: GDP co-movements",
+    x = "Real GDP growth (log diff)",
+    y = "Consumption category growth (log diff)"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "bottom")
+```
+
+
+### (b)
+
+Compute the standard deviation of each series. What can you say about the volatility of each consumption spending category relative to GDP? Provide some intuition.
+
+Answer:
+
+* The vol_stats table below indicates incurables is almost three times as volatile as GDP, reflecting the fact household are able to more easily delay the purchases of durables - it is not a necessity. 
+* Services and nondurables are much steadier, with volatility close to or below GDP, reflecting these categories cover necessities (such as groceries) which households cannot delay.
+
+```{r q1b}
+
+# Compute standard deviations of growth rates
+vol_stats <- g_wide %>%
+  select(gdp_g, dur_g, nond_g, serv_g) %>%
+  summarise(across(everything(), \(x) sd(x, na.rm = TRUE))) %>%
+  pivot_longer(everything(), names_to = "series", values_to = "sd") %>%
+  mutate(series = recode(series,
+                         gdp_g  = "GDP",
+                         dur_g  = "Durables",
+                         nond_g = "Nondurables",
+                         serv_g = "Services")) %>% 
+  arrange(desc(sd))
+
+vol_stats
+
+```
+
+
+### (c)
+
+Calculate cross-correlations of each consumption spending category with GDP for lags 0,1,2 and 3.Which series is the leading indicator of GDP? [Note if a lagged series has high correlation with contemporaneous GDP, this series leads GDP because past values of this series lead the turning points in GDP.]
+
+Answer:
+
+* All three categories of consumption given move closely with GDP, with services showing the stronges contemporaneous correlation. All the correlations at lags 1-3 are much weaker, meaning consumption generally moves with GDP rather than ahead of it.
+
+
+
+```{r q1c}
+
+lags <- 0:3
+
+# Compute cross-correlations in matrix form
+xcor_mat <- g_wide %>%
+  select(qtr, gdp_g, dur_g, nond_g, serv_g) %>%
+  pivot_longer(c(dur_g, nond_g, serv_g),
+               names_to = "series", values_to = "cons_g") %>%
+  group_by(series) %>%
+  group_modify(~{
+    map_dfr(lags, function(L) tibble(
+      lag = L,
+      corr = cor(dplyr::lag(.x$cons_g, L), .x$gdp_g, use = "complete.obs")
+    ))
+  }) %>%
+  ungroup() %>%
+  pivot_wider(names_from = lag, values_from = corr,
+              names_prefix = "lag_")
+
+xcor_mat
+
+write_csv(xcor_mat, "xcor_mat.csv")
+
+``` 
+
+
+
+
+# Question 2
+
+Download monthly data from FRED on the unemployment rate (UNRATE), the level of unemployed (UNEMPLOY), the level of vacancies (JTSJOL), the level of hires (JTSHIL) , and the total separation rate (JTSTSR) for the period covering 2001m1-2025m7.
+
+### (a)
+
+* Consider the matching function we discussed in class $M(U_t, V_t) = \xi \frac{U_t V_t}{\left(U_t^{\alpha} + V_t^{\alpha}\right)^{1/\alpha}}$ where $\xi$ is the matching efficiency paramter and $\alpha$ is the elasticity o the mathcing function with respect the unemployment rate and $0<\alpha<1$. Denote $\theta=V_t/U_t$ and given this matching function, write down an expression for the job-finding rate $p(\theta_t)$ in terms of $\theta_t$ and parameters of the matching function.
+
+
+### (b)
+
+Assuming $\xi=2.9$ abd $\alpha=0.5$. Given data on the lvel of unemployed and vacancies, compute the job-finding rate, $p(\theta_t)$
+
+```{r q2b}
+
+# Parameters
+xi    <- 2.9
+alpha <- 0.5
+
+p_of_theta <- function(theta, xi, alpha) {
+  xi * theta / (1 + theta^alpha)^(1/alpha)
+}
+
+# Get series separately
+getSymbols("UNEMPLOY", src = "FRED", auto.assign = TRUE)
+getSymbols("JTSJOL",   src = "FRED", auto.assign = TRUE)
+
+# Convert xts objects to tibbles with dates
+unemp_df <- data.frame(date = index(UNEMPLOY), UNEMPLOY = as.numeric(UNEMPLOY))
+jolts_df <- data.frame(date = index(JTSJOL),   JTSJOL   = as.numeric(JTSJOL))
+
+# Join and compute variables 
+df <- inner_join(unemp_df, jolts_df, by = "date") %>%
+  filter(!is.na(UNEMPLOY), !is.na(JTSJOL), UNEMPLOY > 0) %>%
+  mutate(
+    theta = JTSJOL / UNEMPLOY,
+    p     = p_of_theta(theta, xi, alpha)
+  )
+
+# Plot 
+ggplot(df, aes(x = date, y = p)) +
+  geom_line(color = "steelblue", linewidth = 0.8) +
+  labs(
+    title = "Chart 2: Job-finding rate",
+    x = NULL, y = "p(theta)"
+  ) +
+  theme_minimal(base_size = 13)
+
+```
+
+```{r q2c}
+
+# Download required FRED series
+getSymbols(c("UNRATE", "JTSTSR", "UNEMPLOY", "JTSJOL"), src = "FRED")
+
+# Convert each series to a data frame
+u_df <- data.frame(date = index(UNRATE),   u_rate_pct = as.numeric(UNRATE))
+s_df <- data.frame(date = index(JTSTSR),   s_rate_pct = as.numeric(JTSTSR))
+U_df <- data.frame(date = index(UNEMPLOY), U_level    = as.numeric(UNEMPLOY))
+v_df <- data.frame(date = index(JTSJOL),   V_level    = as.numeric(JTSJOL))
+
+# Join the series together and construct unemployment dynamics
+df <- u_df %>%
+  inner_join(s_df, by = "date") %>%
+  inner_join(U_df, by = "date") %>%
+  inner_join(v_df, by = "date") %>%
+  mutate(
+    u_t = u_rate_pct/100,                         # unemployment rate as share
+    s_t = s_rate_pct/100,                         # separation rate as share
+    theta = V_level / U_level,                    # market tightness
+    p_t = p_of_theta(theta, xi, alpha),           # job-finding rate from matching
+    u_implied_next = u_t + s_t*(1-u_t) - p_t*u_t, # implied law of motion
+    u_actual_next  = lead(u_t),                   # actual unemployment at t+1
+    date_next      = lead(date)                   # align implied and actual
+  ) %>%
+  filter(!is.na(u_implied_next), !is.na(u_actual_next))
+
+# Reshape for plotting
+plot_df <- df %>%
+  select(date_next, u_implied_next, u_actual_next) %>%
+  rename(Implied = u_implied_next, Actual = u_actual_next) %>%
+  pivot_longer(-date_next, names_to = "series", values_to = "value")
+
+# Plot implied vs actual unemployment rate
+ggplot(plot_df, aes(x = date_next, y = value, color = series)) +
+  geom_line(linewidth = 0.9) +
+  labs(
+    title = "Chart 3: Implied vs Actual Unemployment Rate",
+    x = NULL, y = "Unemployment rate"
+  ) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 0.1)) +
+  theme_minimal(base_size = 13) +
+  theme(legend.title = element_blank())
+
+```
+
+
