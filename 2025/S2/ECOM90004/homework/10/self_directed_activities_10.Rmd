@@ -1,0 +1,151 @@
+---
+title: "`r fname <- gsub('_', ' ', tools::file_path_sans_ext(basename(knitr::current_input()))); paste0(toupper(substr(fname, 1, 1)), substr(fname, 2, nchar(fname)))`"
+author: "Josh Copeland (SID: 1444772)"
+output: html_document
+date: "`r Sys.Date()`"
+---
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+library(lubridate)
+library(janitor)
+library(forecast)
+library(rugarch)
+
+theme_set(theme_minimal())
+
+```
+
+
+
+# Q2
+
+Conditional heteroskedasticity is especially common in high frequency (eg. daily or weekly) financial time series. The rugarch package contains data on daily returns on the SP500 share index from 10-Mar-1987 to 30-Jan-2009. Here is how we can set up this data, using the last five days (business week) as the forecast period.
+
+```{r q2}
+
+data("sp500ret")
+Y <- sp500ret$SP500RET*100
+
+hmax <- 5
+n <- length(Y)-hmax
+Yf <- ts(Y[(n+1):length(Y)], start=n+1)
+Y <- ts(Y[1:n])
+plot(Y)
+
+``` 
+
+
+### (a)
+
+Carry out an ARMA model selection search for this time series, using p_max=10 and q_max=2. Running this may take a minute, since ARMA model estimation with large sample sizes (over 5000) can take a bit longer.
+
+```{r q2a}
+
+# Model selection
+pmax <- 10
+qmax <- 2
+
+# Storage for AIC and LBp
+M <- matrix(nrow=(1+pmax)*(1+qmax), ncol=4)
+colnames(M) <- c("p","q","AICc","LBp")
+rownames(M) <- 1:nrow(M)
+M[,1] <- rep(0:pmax,each=1+qmax)
+M[,2] <- rep(0:qmax,1+pmax)
+
+m <- 1
+for (p in 0:pmax){
+  for (q in 0:qmax){
+    # Estimate ARMA(p,q) model
+    eq <- Arima(Y, order=c(p,0,q))
+
+    # Store AIC and LB p-value
+    M[m,"AICc"] <- eq$aicc
+    M[m,"LBp"] <- round(Box.test(eq$residuals, lag=p+q+5,
+                   type="Ljung-Box", fitdf=p+q)$p.value,4)
+    m <- m+1
+  }
+}
+
+# Restrict to models that pass LB test
+M <- M[which(M[,"LBp"]>0.05),]
+
+# Minimise AICc
+m_AICc <- which.min(M[,"AICc"])
+p <- M[m_AICc,"p"]
+q <- M[m_AICc,"q"]
+cat(paste0("p = ", p, ", q = " ,q))
+
+
+```
+
+
+### (b) 
+
+Estimate the chosen model and plot the inverse roots. What does this plot suggest about the model specification?
+
+* There is a root in both the AR and MA unit circles which are very close to its border. Each suggest nonstationarity and noninvertibility respectively, which means the model is not well specified and should not be used for forecasting.
+
+
+```{r q2b}
+
+p <- 5
+q <- 1
+
+ARMApq <- Arima(Y, order=c(p,0,q))
+plot(ARMApq)
+
+```
+
+### (c) 
+
+Estimate AR(4)-ARCH(1) and AR(4)-GARCH(1,1) models for Y. Which of these two models is preferred, and why?
+
+
+* Although both models pass the ARCH LM tests the AR(4)-ARCH(1) model has the lower AIC and is thus preferred as this indicates a better in-sample fit.
+
+```{r q2c}
+
+# estimate and fitr
+Y_est <- window(Y, end = c(2024, 6))
+
+AR4ARCH1 <- ugarchfit(
+  data = Y_est,
+  ugarchspec(
+    variance.model = list(garchOrder = c(1, 0)),
+    mean.model     = list(armaOrder  = c(4, 0))
+  )
+)
+
+AR4GARCH11 <- ugarchfit(
+  data = Y_est,
+  ugarchspec(
+    variance.model = list(garchOrder = c(1, 1)),
+    mean.model     = list(armaOrder  = c(4, 0))
+  )
+)
+show(AR4GARCH11)
+
+# weighted ARCH LM tests 
+
+summaryAR4GARCH11 <- capture.output(show(AR4GARCH11))
+r1 <- which(summaryAR4GARCH11 == "Weighted ARCH LM Tests")
+r2 <- which(summaryAR4GARCH11 == "Nyblom stability test") - 2
+ARCHLMtests_AR4GARCH11 <- summaryAR4GARCH11[r1:r2]
+print(ARCHLMtests_AR4GARCH11, quote = "FALSE")
+
+# AIC comparison 
+AIC_AR4         <- Arima(Y_est, order = c(4,0,0))$aic
+AIC_AR4ARCH1    <- infocriteria(AR4ARCH1)[1]   * length(Y_est)
+AIC_AR4GARCH11  <- infocriteria(AR4GARCH11)[1] * length(Y_est)
+
+cat(paste0(
+  "AIC AR(4)              = ", round(AIC_AR4, 2), "\n",
+  "AIC AR(4)-ARCH(1)      = ", round(AIC_AR4ARCH1, 2), "\n",
+  "AIC AR(4)-GARCH(1,1)   = ", round(AIC_AR4GARCH11, 2), "\n"
+))
+
+
+
+```

@@ -146,21 +146,22 @@ Answer:
 
 lags <- 0:3
 
-# Compute cross-correlations in matrix form
 xcor_mat <- g_wide %>%
   select(qtr, gdp_g, dur_g, nond_g, serv_g) %>%
   pivot_longer(c(dur_g, nond_g, serv_g),
                names_to = "series", values_to = "cons_g") %>%
   group_by(series) %>%
-  group_modify(~{
-    map_dfr(lags, function(L) tibble(
-      lag = L,
-      corr = cor(dplyr::lag(.x$cons_g, L), .x$gdp_g, use = "complete.obs")
-    ))
-  }) %>%
-  ungroup() %>%
-  pivot_wider(names_from = lag, values_from = corr,
-              names_prefix = "lag_")
+  mutate(
+    lag_0 = cons_g,
+    lag_1 = dplyr::lag(cons_g, 1),
+    lag_2 = dplyr::lag(cons_g, 2),
+    lag_3 = dplyr::lag(cons_g, 3)
+  ) %>%
+  summarise(
+    across(starts_with("lag_"),
+           ~ round(cor(.x, gdp_g, use = "complete.obs"), 2)),
+    .groups = "drop"
+  )
 
 xcor_mat
 

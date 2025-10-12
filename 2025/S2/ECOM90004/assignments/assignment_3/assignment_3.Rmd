@@ -1,0 +1,162 @@
+---
+title: "ECOM90004 Assignment 3"
+output: html_document
+author: "Josh Copeland (SID: 1444772)"
+date: "`r Sys.Date()`"
+---
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+library(lubridate)
+library(forecast)
+library(urca)
+library(rugarch)
+
+theme_set(theme_minimal())
+
+```
+
+```{r setup_comment}
+
+#Packages used:
+
+# library(tidyverse)
+# library(lubridate)
+# library(forecast)
+# library(urca)
+#library(rugarch)
+
+```
+
+```{r setup_data}
+# Raw data
+data <- read_csv("Google.csv", show_col_type = FALSE) %>% 
+  select(date = Date, price = Google) %>% # Google column name to price
+  mutate(price_log = log(price)) %>% # Creating log price series
+  mutate(returns = price_log - lag(price_log)) %>%   # Creating dlog series 
+  na.omit()
+
+data_est <- data %>% slice(1:(n() - 10)) # Estimation sample
+
+data_fcst <- data %>% slice((n() - 9):n()) # Testing sample
+
+```
+# Question 1
+
+```{r q1}
+ggplot(data_est, aes(x = date, y = returns)) + geom_line() + labs(title = "Time Series Plot of Returns",x = "Date", y = "Log Returns")
+
+
+ggplot(data_est, aes(returns)) +
+  geom_histogram(aes(y = after_stat(density)), bins = 30, alpha = .6) +
+  stat_function(fun = dnorm, args = with(data_est, list(mean = mean(returns, na.rm=TRUE), sd = sd(returns, na.rm=TRUE))), linewidth = 1) +
+  labs(title = "Returns Histogram with Fitted Normal Distribution", x = "Returns", y = "Density") +
+  theme_minimal()
+
+stats <- data_est %>% summarise(
+  Mean = mean(returns, na.rm = TRUE),
+  SD = sd(returns, na.rm = TRUE),
+  Skewness = mean((returns - mean(returns, na.rm=TRUE))^3, na.rm=TRUE) / sd(returns, na.rm=TRUE)^3,
+  Kurtosis = mean((returns - mean(returns, na.rm=TRUE))^4, na.rm=TRUE) / sd(returns, na.rm=TRUE)^4
+) %>%  print()
+
+```
+
+
+# Question 2
+
+```{r q2}
+
+
+```
+
+
+# Question 3
+
+### (a)
+
+```{r q3a}
+
+
+```
+
+### (b)
+
+```{r q3b}
+
+
+```
+
+
+# Question 4
+
+### (a)
+
+```{r q4a}
+
+
+```
+
+### (b)
+
+```{r q4b}
+
+
+```
+
+### (c)
+
+```{r q4c}
+
+
+```
+
+### (d)
+
+```{r q4d}
+
+
+```
+
+
+# Question 5
+
+### (a)
+
+```{r q5a}
+
+
+```
+
+### (b)
+
+```{r q5b}
+
+
+```
+### (c)
+
+```{r q5c}
+
+
+```
+### (d)
+
+```{r q5d}
+
+
+```
+### (e)
+
+```{r q5e}
+
+
+```
+
+### (f)
+
+```{r q5f}
+
+
+```

@@ -1,0 +1,341 @@
+---
+title: "`r fname <- gsub('_', ' ', tools::file_path_sans_ext(basename(knitr::current_input()))); paste0(toupper(substr(fname, 1, 1)), substr(fname, 2, nchar(fname)))`"
+author: "Josh Copeland (SID: 1444772)"
+output: html_document
+date: "`r Sys.Date()`"
+---
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+library(lubridate)
+library(janitor)
+library(forecast)
+library(rugarch)
+
+theme_set(theme_minimal())
+
+```
+
+```{r setup_comment, include=TRUE}
+
+#Packages used:
+
+# library(tidyverse)
+# library(lubridate)
+# library(janitor)
+# library(forecast)
+
+```
+
+# Q1 
+
+Previously we found an AR(3) model is an appropriate conditional mean model for the interest rates on 3 month Bank Accepted Bills, Jan-2010 to Jun-2024.
+
+Set up the data in the usual way.
+
+```{r q1}
+
+dt <- read.csv("BAB3mth.csv")
+Y <- ts(dt$BAB3, start=c(2010,1), end=c(2025,6), frequency=12)
+DY <- diff(Y)
+
+# Forecast sample c(2024,7) to c(2025,6)
+DYf <- window(DY, start=c(2024,7), end=c(2025,6))
+Timef <- time(DYf)
+hmax <- length(DYf)
+
+# Estimation sample c(2010,1) to c(2024,6)
+DY <- window(DY, end=c(2024,6))
+Time <- time(DY)
+
+
+```
+
+### (a)
+
+Estimate an AR(3)-ARCH(1) model for DY, and show the results.
+
+
+```{r q1a}
+
+AR3ARCH1 <- ugarchfit(data=DY,
+    ugarchspec(variance.model=list(garchOrder=c(1,0)),
+               mean.model=list(armaOrder=c(3,0))))
+show(AR3ARCH1)
+
+
+```
+
+### (b)
+
+Extracting the ARCH LM tests is a bit fiddly. Surprisingly it appears there is not a specific ARCH LM test method in rugarch, as there is for AIC for eg. Doing the following is easier for current purposes than coding up the test or bringing in a different package with lesser capabilities in other dimensions.
+
+
+```{r q1b}
+
+summaryAR3ARCH1 <- capture.output(show(AR3ARCH1))
+r1 <- which(summaryAR3ARCH1=="Weighted ARCH LM Tests")
+r2 <- which(summaryAR3ARCH1=="Nyblom stability test")-2
+ARCHLMtests <- summaryAR3ARCH1[r1:r2]
+print(ARCHLMtests, quote="FALSE")
+
+
+```
+
+
+### (c)
+
+Compare the AIC of the AR(3)-ARCH(1) model to that of the AR(3) model to check whether including the ARCH model produces an improvement in fit.
+
+The AIC for the AR(3)-ARCH(1) model can be extracted as below. It is calculated with a scaling by, so we un-do this by multiplying by (length(DY)) for comparison with the AR(3) AIC. This scaling is not right or wrong, simply a choice that is sometimes made. The important thing is to be consistent across models. Also it would be convenient to be able to include a GARCH(0,0) specification in the ugarchspec, but this is not permitted in rugarch.
+
+```{r q1c}
+
+print(infocriteria(AR3ARCH1))
+
+cat(paste0("AIC AR3        = ", 
+   round(Arima(DY, order=c(3,0,0))$aic,2), 
+   "\n"))
+
+cat(paste0("AIC AR3ARCH1   = ", 
+   round(infocriteria(AR3ARCH1)[1]*length(DY),2), 
+   "\n"))
+
+
+```
+
+
+### (d)
+
+Estimate an AR(3)-GARCH(1,1) model. Check the ARCH LM tests and use AIC to compare to the AR(3) and AR(3)-ARCH(1) models.
+
+The AR(3)-GARCH(1,1) model is preferred in AIC and it passes the ARCH LM tests.
+
+```{r q1d}
+
+
+# Fit AR(3)–GARCH(1,1)
+AR3GARCH11 <- ugarchfit(
+  data = DY,
+  ugarchspec(
+    variance.model = list(garchOrder = c(1, 1)),
+    mean.model     = list(armaOrder  = c(3, 0))
+  )
+)
+show(AR3GARCH11)
+
+# Extract and print the "Weighted ARCH LM Tests" block from the summary
+summaryAR3GARCH11 <- capture.output(show(AR3GARCH11))
+r1 <- which(summaryAR3GARCH11 == "Weighted ARCH LM Tests")
+r2 <- which(summaryAR3GARCH11 == "Nyblom stability test") - 2
+ARCHLMtests_GARCH11 <- summaryAR3GARCH11[r1:r2]
+print(ARCHLMtests_GARCH11, quote = "FALSE")
+
+# AIC comparison (scale rugarch's AIC by length(DY) for apples-to-apples)
+AIC_AR3          <- Arima(DY, order = c(3,0,0))$aic
+AIC_AR3ARCH1     <- infocriteria(AR3ARCH1)[1] * length(DY)
+AIC_AR3GARCH11   <- infocriteria(AR3GARCH11)[1] * length(DY)
+
+cat(paste0(
+  "AIC AR(3)              = ", round(AIC_AR3, 2), "\n",
+  "AIC AR(3)-ARCH(1)      = ", round(AIC_AR3ARCH1, 2), "\n",
+  "AIC AR(3)-GARCH(1,1)   = ", round(AIC_AR3GARCH11, 2), "\n"
+))
+
+```
+
+### (e)
+
+Produce forecasts for each month of Jul-2024 to Jun-2025. Show the point forecasts, standard deviation forecasts, and associated 95% prediction intervals. Plot these, and compare with the AR(3) forecasts and prediction intervals.
+
+```{r q1e}
+
+# h step ahead forecasts AR3-ARCH1
+
+h <- length(DYf)
+fc_dates <- seq(as.Date("2024-07-01"), by = "1 month", length.out = h)
+
+fit_ar3 <- Arima(DY, order = c(3,0,0))
+fc_ar3  <- forecast(fit_ar3, h = h)
+df_ar3 <- tibble(
+  date  = fc_dates,
+  model = "AR(3)",
+  mean  = as.numeric(fc_ar3$mean),
+  lower = as.numeric(fc_ar3$lower[,"95%"]),
+  upper = as.numeric(fc_ar3$upper[,"95%"])
+)
+
+fc_arch1 <- ugarchforecast(AR3ARCH1, n.ahead = h)
+df_arch1 <- tibble(
+  date  = fc_dates,
+  model = "AR(3)-ARCH(1)",
+  mean  = as.numeric(fc_arch1@forecast$seriesFor),
+  sd    = as.numeric(fc_arch1@forecast$sigmaFor)
+) |> mutate(lower = mean - 1.96*sd, upper = mean + 1.96*sd)
+
+fc_garch <- ugarchforecast(AR3GARCH11, n.ahead = h)
+df_garch <- tibble(
+  date  = fc_dates,
+  model = "AR(3)-GARCH(1,1)",
+  mean  = as.numeric(fc_garch@forecast$seriesFor),
+  sd    = as.numeric(fc_garch@forecast$sigmaFor)
+) |> mutate(lower = mean - 1.96*sd, upper = mean + 1.96*sd)
+
+fc_all <- bind_rows(
+  select(df_ar3, date, model, mean, lower, upper),
+  select(df_arch1, date, model, mean, lower, upper),
+  select(df_garch, date, model, mean, lower, upper)
+)
+
+ts_to_df <- function(x){
+  s <- tsp(x)[1]; sY <- floor(s); sM <- floor((s - sY)*12 + 0.5) + 1
+  dates <- seq(as.Date(sprintf("%d-%02d-01", sY, sM)), by = "1 month", length.out = length(x))
+  tibble(date = dates, value = as.numeric(x))
+}
+hist_df <- ts_to_df(DY) |> slice_tail(n = 12)
+
+ggplot() +
+  geom_line(data = hist_df, aes(date, value), linewidth = 0.6, alpha = 0.7) +
+  geom_ribbon(data = fc_all, aes(date, ymin = lower, ymax = upper, fill = model), alpha = 0.18) +
+  geom_line(data = fc_all, aes(date, mean, color = model), linewidth = 0.9) +
+  labs(title = "Forecasts for DY (Jul-2024 to Jun-2025)",
+       subtitle = "AR(3) vs ARCH(1) vs GARCH(1,1)",
+       x = NULL, y = "DY") +
+  scale_x_date(date_breaks = "2 months", date_labels = "%b-%Y") +
+  theme_minimal(base_size = 12) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.title = element_blank())
+
+```
+
+# Q2
+
+Conditional heteroskedasticity is especially common in high frequency (eg. daily or weekly) financial time series. The rugarch package contains data on daily returns on the SP500 share index from 10-Mar-1987 to 30-Jan-2009. Here is how we can set up this data, using the last five days (business week) as the forecast period.
+
+```{r q2}
+
+data("sp500ret")
+Y <- sp500ret$SP500RET*100
+
+hmax <- 5
+n <- length(Y)-hmax
+Yf <- ts(Y[(n+1):length(Y)], start=n+1)
+Y <- ts(Y[1:n])
+plot(Y)
+
+``` 
+
+
+### (a)
+
+Carry out an ARMA model selection search for this time series, using p_max=10 and q_max=2. Running this may take a minute, since ARMA model estimation with large sample sizes (over 5000) can take a bit longer.
+
+```{r q2a}
+
+# Model selection
+pmax <- 10
+qmax <- 2
+
+# Storage for AIC and LBp
+M <- matrix(nrow=(1+pmax)*(1+qmax), ncol=4)
+colnames(M) <- c("p","q","AICc","LBp")
+rownames(M) <- 1:nrow(M)
+M[,1] <- rep(0:pmax,each=1+qmax)
+M[,2] <- rep(0:qmax,1+pmax)
+
+m <- 1
+for (p in 0:pmax){
+  for (q in 0:qmax){
+    # Estimate ARMA(p,q) model
+    eq <- Arima(Y, order=c(p,0,q))
+
+    # Store AIC and LB p-value
+    M[m,"AICc"] <- eq$aicc
+    M[m,"LBp"] <- round(Box.test(eq$residuals, lag=p+q+5,
+                   type="Ljung-Box", fitdf=p+q)$p.value,4)
+    m <- m+1
+  }
+}
+
+# Restrict to models that pass LB test
+M <- M[which(M[,"LBp"]>0.05),]
+
+# Minimise AICc
+m_AICc <- which.min(M[,"AICc"])
+p <- M[m_AICc,"p"]
+q <- M[m_AICc,"q"]
+cat(paste0("p = ", p, ", q = " ,q))
+
+
+```
+
+
+### (b) 
+
+Estimate the chosen model and plot the inverse roots. What does this plot suggest about the model specification?
+
+* There is a root in both the AR and MA unit circles which are very close to its border. Each suggest nonstationarity and noninvertibility respectively, which means the model is not well specified and should not be used for forecasting.
+
+
+```{r q2b}
+
+p <- 5
+q <- 1
+
+ARMApq <- Arima(Y, order=c(p,0,q))
+plot(ARMApq)
+
+```
+
+### (c) 
+
+Estimate AR(4)-ARCH(1) and AR(4)-GARCH(1,1) models for Y. Which of these two models is preferred, and why?
+
+
+* Although both models pass the ARCH LM tests the AR(4)-ARCH(1) model has the lower AIC and is thus preferred as this indicates a better in-sample fit.
+
+```{r q2c}
+
+# estimate and fitr
+Y_est <- window(Y, end = c(2024, 6))
+
+AR4ARCH1 <- ugarchfit(
+  data = Y_est,
+  ugarchspec(
+    variance.model = list(garchOrder = c(1, 0)),
+    mean.model     = list(armaOrder  = c(4, 0))
+  )
+)
+
+AR4GARCH11 <- ugarchfit(
+  data = Y_est,
+  ugarchspec(
+    variance.model = list(garchOrder = c(1, 1)),
+    mean.model     = list(armaOrder  = c(4, 0))
+  )
+)
+show(AR4GARCH11)
+
+# weighted ARCH LM tests 
+
+summaryAR4GARCH11 <- capture.output(show(AR4GARCH11))
+r1 <- which(summaryAR4GARCH11 == "Weighted ARCH LM Tests")
+r2 <- which(summaryAR4GARCH11 == "Nyblom stability test") - 2
+ARCHLMtests_AR4GARCH11 <- summaryAR4GARCH11[r1:r2]
+print(ARCHLMtests_AR4GARCH11, quote = "FALSE")
+
+# AIC comparison 
+AIC_AR4         <- Arima(Y_est, order = c(4,0,0))$aic
+AIC_AR4ARCH1    <- infocriteria(AR4ARCH1)[1]   * length(Y_est)
+AIC_AR4GARCH11  <- infocriteria(AR4GARCH11)[1] * length(Y_est)
+
+cat(paste0(
+  "AIC AR(4)              = ", round(AIC_AR4, 2), "\n",
+  "AIC AR(4)-ARCH(1)      = ", round(AIC_AR4ARCH1, 2), "\n",
+  "AIC AR(4)-GARCH(1,1)   = ", round(AIC_AR4GARCH11, 2), "\n"
+))
+
+
+
+```
