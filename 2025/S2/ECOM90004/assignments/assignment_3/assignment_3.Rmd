@@ -45,7 +45,7 @@ data_fcst <- data %>% slice((n() - 9):n()) # Testing sample
 # Question 1
 
 ```{r q1}
-ggplot(data_est, aes(x = date, y = returns)) + geom_line() + labs(title = "Time Series Plot of Returns",x = "Date", y = "Log Returns")
+ggplot(data_est, aes(x = date, y = returns)) + geom_line() + labs(title = "Google daily returns",x = "Date", y = "Log Returns")
 
 
 ggplot(data_est, aes(returns)) +
@@ -68,6 +68,11 @@ stats <- data_est %>% summarise(
 
 ```{r q2}
 
+data_est <- data_est %>% 
+  mutate(weekday = wday(date, label = TRUE, abbr = TRUE))
+
+model_dow <- lm(returns ~ weekday, data = data_est)
+summary(model_dow)
 
 ```
 
@@ -77,7 +82,18 @@ stats <- data_est %>% summarise(
 ### (a)
 
 ```{r q3a}
+pmax <- 15
+AICc_vals <- LBp_vals <- numeric(pmax + 1)
 
+for (p in 0:pmax) {
+  eq <- Arima(data_est$returns, order = c(p, 0, 0), include.mean = FALSE, method = "ML")
+  AICc_vals[p + 1] <- eq$aicc
+  LBp_vals[p + 1] <- Box.test(residuals(eq), lag = p + 4, type = "Ljung-Box", fitdf = p)$p.value
+}
+
+best_p <- which.min(AICc_vals) - 1
+cat("Selected AR order p =", best_p, "\nAICc =", round(min(AICc_vals), 3),
+    "\nLjung-Box p-value =", round(LBp_vals[best_p + 1], 4), "\n")
 
 ```
 
@@ -85,6 +101,9 @@ stats <- data_est %>% summarise(
 
 ```{r q3b}
 
+ar9 <- Arima(na.omit(data_est$returns), order = c(9,0,0), include.mean = FALSE)
+
+autoplot(ar9) + ggtitle("AR(9) Roots")
 
 ```
 
@@ -93,30 +112,61 @@ stats <- data_est %>% summarise(
 
 ### (a)
 
+\[
+\begin{aligned}
+Y_t &= -0.0239\,Y_{t-1} - 0.0185\,Y_{t-2} - 0.0369\,Y_{t-3} - 0.0300\,Y_{t-4} - 0.0487\,Y_{t-5} - 0.0215\,Y_{t-6} \\
+    &\quad + 0.0399\,Y_{t-7} - 0.0254\,Y_{t-8} + 0.0255\,Y_{t-9} + U_t \\
+\operatorname{var}(U_t \mid \mathcal{F}_{t-1}) &= 0.0000 + 0.0609\,U_{t-1}^2 + 0.8891\,\sigma_{t-1}^2
+\end{aligned}
+\]
+
+
 ```{r q4a}
+# Fit AR(9)-GARCH(1,1)
+spec <- ugarchspec(
+  variance.model = list(model = "sGARCH", garchOrder = c(1,1)),
+  mean.model     = list(armaOrder = c(9,0), include.mean = FALSE),
+  distribution.model = "norm"
+)
+fit_garch <- ugarchfit(spec, data = data_est$returns)
 
-
+# Extract coefficients only
+coef_table <- round(coef(fit_garch), 4)
+coef_table
 ```
 
 ### (b)
 
 ```{r q4b}
-
-
+garch_summary <- capture.output(show(fit_garch))
+start_idx <- which(garch_summary == "Weighted ARCH LM Tests")
+ARCHLM_extract <- garch_summary[start_idx:(start_idx + 6)]
+cat(ARCHLM_extract, sep = "\n")
 ```
 
 ### (c)
 
 ```{r q4c}
-
+vol_df <- tibble(date = data_est$date, sd = sigma(fit_garch))
+ggplot(vol_df, aes(date, sd)) + geom_line() + labs(title="Conditional Volatility", y="sigma")
 
 ```
 
 ### (d)
 
 ```{r q4d}
+resid_std <- as.numeric(residuals(fit_garch, standardize = TRUE))
 
+ggplot(tibble(resid_std), aes(resid_std)) +
+  geom_histogram(aes(y = after_stat(density)), bins = 30, alpha = 0.6) +
+  stat_function(fun = dnorm, args = list(mean = mean(resid_std), sd = sd(resid_std)), linewidth = 1) +labs(title="Distribution of AR(9)-GARCH(1-1) residuals")
 
+tibble(
+  Mean = mean(resid_std),
+  SD = sd(resid_std),
+  Skewness = mean((resid_std - mean(resid_std))^3) / sd(resid_std)^3,
+  Kurtosis = mean((resid_std - mean(resid_std))^4) / sd(resid_std)^4
+)
 ```
 
 
@@ -125,38 +175,90 @@ stats <- data_est %>% summarise(
 ### (a)
 
 ```{r q5a}
+fc <- forecast(ar9, h = 10)
+fc_ar9 <- tibble(H = 1:10,
+                 Forecast = as.numeric(fc$mean),
+                 Lo95 = as.numeric(fc$lower[,"95%"]),
+                 Hi95 = as.numeric(fc$upper[,"95%"]),
+                 Actual = as.numeric(data_fcst$returns),
+                 Error = Actual - Forecast)
 
+print(fc_ar9)
 
 ```
 
 ### (b)
 
 ```{r q5b}
-
-
+garch_fc <- ugarchforecast(fit_garch, n.ahead = 10)
+fc_garch <- tibble(
+  H = 1:10,
+  Forecast = as.numeric(fitted(garch_fc)),
+  SD_Forecast = as.numeric(sigma(garch_fc)),
+  Lo95 = Forecast - 1.96 * SD_Forecast,
+  Hi95 = Forecast + 1.96 * SD_Forecast,
+  Actual = as.numeric(data_fcst$returns),
+  Error = Actual - Forecast)
 ```
 ### (c)
 
 ```{r q5c}
-
-
+rmse_ar9 <- sqrt(mean(fc_ar9$Error^2))
+rmse_garch <- sqrt(mean(fc_garch$Error^2))
+tibble(Model = c("AR(9)", "AR(9)-GARCH(1,1)"),
+       RMSE = c(rmse_ar9, rmse_garch))
 ```
 ### (d)
 
 ```{r q5d}
-
-
+pdat <- bind_rows(tail(data_est,20)%>%transmute(date, y=returns, type="Actual"),
+                  fc_ar9%>%mutate(date=data_fcst$date)%>%transmute(date, y=Forecast, type="AR(9)"),
+                  fc_garch%>%mutate(date=data_fcst$date)%>%transmute(date, y=Forecast, type="AR(9)-GARCH(1,1)"))
+ggplot()+
+  geom_line(data=pdat, aes(date,y,color=type))+
+  geom_ribbon(data=fc_ar9%>%mutate(date=data_fcst$date), aes(date,ymin=Lo95,ymax=Hi95), alpha=.15, fill="blue")+
+  geom_ribbon(data=fc_garch%>%mutate(date=data_fcst$date), aes(date,ymin=Lo95,ymax=Hi95), alpha=.15, fill="red")+
+  labs(title="Last 4 weeks (actual) + 10-step forecasts", x="Date", y="Returns")
 ```
+
 ### (e)
 
 ```{r q5e}
+boot <- ugarchboot(fit_garch, method = "partial", n.ahead = 10, n.bootpred = 5000)
 
-
+boot_pi <- tibble(
+  H = 1:10,
+  Median = apply(boot@forc@forecast$series, 2, median),
+  Lo95 = apply(boot@forc@forecast$series, 2, quantile, probs = 0.025),
+  Hi95 = apply(boot@forc@forecast$series, 2, quantile, probs = 0.975)
+) %>% print()
 ```
 
 ### (f)
 
 ```{r q5f}
+
+# (1) Compare analytic vs bootstrap intervals
+anal_w <- fc_garch$Hi95 - fc_garch$Lo95
+boot_w <- boot_pi$Hi95 - boot_pi$Lo95
+comp <- tibble(
+  H = 1:10,
+  Analytic_Width = anal_w,
+  Bootstrap_Width = boot_w,
+  Width_Ratio = boot_w / anal_w,
+  Analytic_Asym = (fc_garch$Hi95 - fc_garch$Forecast) - (fc_garch$Forecast - fc_garch$Lo95),
+  Boot_Asym = (boot_pi$Hi95 - boot_pi$Median) - (boot_pi$Median - boot_pi$Lo95)
+)
+
+# (2) Residual normality diagnostics to explain differences (Q4d link)
+e <- as.numeric(residuals(fit_garch, standardize = TRUE)); m <- mean(e); s <- sd(e)
+skew <- mean((e - m)^3) / s^3; kurt <- mean((e - m)^4) / s^4
+JB <- length(e) * (skew^2/6 + (kurt - 3)^2/24); JB_p <- 1 - pchisq(JB, df = 2)
+tails <- tibble(
+  q_emp_2.5 = quantile(e, .025), q_emp_97.5 = quantile(e, .975),
+  q_norm_2.5 = qnorm(.025),       q_norm_97.5 = qnorm(.975),
+  Skewness = skew, Kurtosis = kurt, JB = JB, JB_p = JB_p
+) %>% print()
 
 
 ```
