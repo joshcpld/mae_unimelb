@@ -30,11 +30,10 @@ theme_set(theme_minimal())
 ```
 
 ```{r setup_data}
-# Raw data
 data <- read_csv("Google.csv", show_col_type = FALSE) %>% 
-  select(date = Date, price = Google) %>% # Google column name to price
-  mutate(price_log = log(price)) %>% # Creating log price series
-  mutate(returns = price_log - lag(price_log)) %>%   # Creating dlog series 
+  select(date = Date, price = Google) %>% 
+  mutate(price_log = log(price)) %>% 
+  mutate(returns = price_log - lag(price_log)) %>%   
   na.omit()
 
 data_est <- data %>% slice(1:(n() - 10)) # Estimation sample
@@ -44,6 +43,16 @@ data_fcst <- data %>% slice((n() - 9):n()) # Testing sample
 ```
 # Question 1
 
+The analysis below indicates:
+
+* The time series of daily google returns is a mean-reverting process around zero, but exhibits clear patterns of conditional volatility (non-constant variance).
+
+* The histogram reinforces this, revealing a distribution which is more peaked and heavy-tailed than the fitted normal curve.
+
+* Descriptive statistics reinforce these observations: a near-zero mean with high kurtosis and non-zero skewness indicates asymmetry and fat tails.
+
+These findings point to non-constant/non-Gaussian volatilty in this process. This merits investigating using an AR-GARCH methodology to model it.
+
 ```{r q1}
 ggplot(data_est, aes(x = date, y = returns)) + geom_line() + labs(title = "Google daily returns",x = "Date", y = "Log Returns")
 
@@ -51,8 +60,7 @@ ggplot(data_est, aes(x = date, y = returns)) + geom_line() + labs(title = "Googl
 ggplot(data_est, aes(returns)) +
   geom_histogram(aes(y = after_stat(density)), bins = 30, alpha = .6) +
   stat_function(fun = dnorm, args = with(data_est, list(mean = mean(returns, na.rm=TRUE), sd = sd(returns, na.rm=TRUE))), linewidth = 1) +
-  labs(title = "Returns Histogram with Fitted Normal Distribution", x = "Returns", y = "Density") +
-  theme_minimal()
+  labs(title = "Histogram of Daily Google Returns with Fitted Normal Distribution", x = "Returns", y = "Density")
 
 stats <- data_est %>% summarise(
   Mean = mean(returns, na.rm = TRUE),
@@ -60,26 +68,32 @@ stats <- data_est %>% summarise(
   Skewness = mean((returns - mean(returns, na.rm=TRUE))^3, na.rm=TRUE) / sd(returns, na.rm=TRUE)^3,
   Kurtosis = mean((returns - mean(returns, na.rm=TRUE))^4, na.rm=TRUE) / sd(returns, na.rm=TRUE)^4
 ) %>%  print()
-
 ```
 
 
 # Question 2
 
-```{r q2}
+The `model_dow` object below create a dummy variable for each day of the week, with coefficient interpreted as deviations from the intercept (Friday). It shows there is no "day of the week" or "calender" effect on Google's returns because:
 
+* The F-test's p-value is very large (0.8027), and therefore we cannot reject the null hypothesis that all weekday coefficients are jointly equal to zero.
+
+* All of the inidividual coefficients are statistically insignificant at any reasonable significance level.
+
+```{r q2}
 data_est <- data_est %>% 
   mutate(weekday = wday(date, label = TRUE, abbr = TRUE))
 
-model_dow <- lm(returns ~ weekday, data = data_est)
+model_dow <- lm(returns ~ weekday, data = data_est, contrasts = list(weekday = "contr.treatment"))
 summary(model_dow)
-
 ```
 
 
 # Question 3
 
 ### (a)
+
+An AR(9) model is selected because it minimised AICc among the candidate specifications, which indicates the best balance between model fit and parsimony. Additionally, the Ljung-Box test p-value (0.9647) is large, suggesting there is no remaining autocorrelation in the residuals, supporting this model this further.
+
 
 ```{r q3a}
 pmax <- 15
@@ -94,17 +108,17 @@ for (p in 0:pmax) {
 best_p <- which.min(AICc_vals) - 1
 cat("Selected AR order p =", best_p, "\nAICc =", round(min(AICc_vals), 3),
     "\nLjung-Box p-value =", round(LBp_vals[best_p + 1], 4), "\n")
-
 ```
 
 ### (b)
 
+The inverse roots of this model all lie strictly within the unit circle, which conforms the stationarity of this model. Therefore, an AR(9) process is a suitable conditional mean model for Google's returns.
+
+
 ```{r q3b}
-
-ar9 <- Arima(na.omit(data_est$returns), order = c(9,0,0), include.mean = FALSE)
-
+p <- 9
+ar9 <- Arima(na.omit(data_est$returns), order = c(p,0,0), include.mean = FALSE)
 autoplot(ar9) + ggtitle("AR(9) Roots")
-
 ```
 
 
@@ -112,33 +126,48 @@ autoplot(ar9) + ggtitle("AR(9) Roots")
 
 ### (a)
 
-\[
+The analysis below model's Google's returns using an AR(9)-GARCH(1,1) process, which can be represented as:
+
 \begin{aligned}
-Y_t &= -0.0239\,Y_{t-1} - 0.0185\,Y_{t-2} - 0.0369\,Y_{t-3} - 0.0300\,Y_{t-4} - 0.0487\,Y_{t-5} - 0.0215\,Y_{t-6} \\
-    &\quad + 0.0399\,Y_{t-7} - 0.0254\,Y_{t-8} + 0.0255\,Y_{t-9} + U_t \\
-\operatorname{var}(U_t \mid \mathcal{F}_{t-1}) &= 0.0000 + 0.0609\,U_{t-1}^2 + 0.8891\,\sigma_{t-1}^2
+\text{Mean equation:} \quad 
+Y_t &= \phi_1 Y_{t-1} + \phi_2 Y_{t-2} + \cdots + \phi_9 Y_{t-9} + U_t, \\
+\\
+\text{Innovation structure:} \quad 
+U_t &= \sigma_t \varepsilon_t, \qquad \varepsilon_t \sim i.i.d.\, D(0,1), \\
+\\
+\text{Conditional variance (GARCH(1,1)):} \quad 
+\sigma_t^2 &= \omega + \alpha\,U_{t-1}^2 + \beta\,\sigma_{t-1}^2.
 \end{aligned}
-\]
+
+Using the coefficients estimated below, these equations can be rewritten as: 
+
+\begin{aligned}
+Y_t &= -0.0239\,Y_{t-1} - 0.0185\,Y_{t-2} - 0.0369\,Y_{t-3} - 0.0300\,Y_{t-4} - 0.0487\,Y_{t-5} \\
+    &\quad - 0.0215\,Y_{t-6} + 0.0399\,Y_{t-7} - 0.0254\,Y_{t-8} + 0.0255\,Y_{t-9} + U_t, \\
+\\
+U_t &= \sigma_t \varepsilon_t, \qquad \varepsilon_t \sim i.i.d.\, D(0,1), \\
+\\
+\sigma_t^2 &= 0.0000 + 0.0609\,U_{t-1}^2 + 0.8891\,\sigma_{t-1}^2.
+\end{aligned}
+
 
 
 ```{r q4a}
-# Fit AR(9)-GARCH(1,1)
-spec <- ugarchspec(
-  variance.model = list(model = "sGARCH", garchOrder = c(1,1)),
-  mean.model     = list(armaOrder = c(9,0), include.mean = FALSE),
-  distribution.model = "norm"
-)
-fit_garch <- ugarchfit(spec, data = data_est$returns)
+ar_garch_model <- ugarchfit(
+  data = data_est$returns,
+  ugarchspec(
+    variance.model = list(garchOrder = c(1, 1)),
+    mean.model     = list(armaOrder = c(p, 0), include.mean = FALSE)))
 
-# Extract coefficients only
-coef_table <- round(coef(fit_garch), 4)
-coef_table
+coef_table <- round(coef(ar_garch_model), 4) %>%  print()
 ```
 
 ### (b)
 
+After fitting an ARMA-(G)ARCH model the Weighted ARCH LM tests examin whether there is any remaining ARCH structure in the residuals. The p-values for these tests are very large (0.6985, 0.9748, 0.9912 at lags 3, 5 and 7 respectively). Therefore we fail to reject the null hypothesis of no reamining ARCH effects. Therefore, the AR(9)-GARCH(1,1) model successfully captures the conditional variance dynamics of Google's daily returns ashere is no evidence of leftover volatility clustering in the standardised residuals.
+
 ```{r q4b}
-garch_summary <- capture.output(show(fit_garch))
+garch_summary <- capture.output(show(ar_garch_model))
 start_idx <- which(garch_summary == "Weighted ARCH LM Tests")
 ARCHLM_extract <- garch_summary[start_idx:(start_idx + 6)]
 cat(ARCHLM_extract, sep = "\n")
@@ -146,16 +175,24 @@ cat(ARCHLM_extract, sep = "\n")
 
 ### (c)
 
+This "volatility" was greatest around early 2020, which aligns with the initial outbreak of the COVID-19 pandemic and associated global market turmoil. It's likely this lines up with the March 2020 equity crash, when investors reacted to lockdowns and uncertainty in earnings. 
+
 ```{r q4c}
-vol_df <- tibble(date = data_est$date, sd = sigma(fit_garch))
+vol_df <- tibble(date = data_est$date, sd = sigma(ar_garch_model))
 ggplot(vol_df, aes(date, sd)) + geom_line() + labs(title="Conditional Volatility", y="sigma")
 
 ```
 
 ### (d)
 
+The standardised residuals appear centered around zero with approximately unit variable, suggesting this model has correctly captured the conditional variance element of this process.
+
+However, the residual distribution shows evidence of leptokurtosis, as indicated by the descriptive statistics: skewness of –0.294 and kurtosis of 7.26, which is more than double the Gaussian benchmark of 3.
+
+Overall, this indicated that although volatility clustering has been filtered out, the residuals still exhibit non-normal behaviour in higher moments.
+
 ```{r q4d}
-resid_std <- as.numeric(residuals(fit_garch, standardize = TRUE))
+resid_std <- as.numeric(residuals(ar_garch_model, standardize = TRUE))
 
 ggplot(tibble(resid_std), aes(resid_std)) +
   geom_histogram(aes(y = after_stat(density)), bins = 30, alpha = 0.6) +
@@ -190,7 +227,7 @@ print(fc_ar9)
 ### (b)
 
 ```{r q5b}
-garch_fc <- ugarchforecast(fit_garch, n.ahead = 10)
+garch_fc <- ugarchforecast(ar_garch_model, n.ahead = 10)
 fc_garch <- tibble(
   H = 1:10,
   Forecast = as.numeric(fitted(garch_fc)),
@@ -199,8 +236,11 @@ fc_garch <- tibble(
   Hi95 = Forecast + 1.96 * SD_Forecast,
   Actual = as.numeric(data_fcst$returns),
   Error = Actual - Forecast)
+print(fc_garch)
 ```
 ### (c)
+
+The AR(9)-GARCH(1,1) model is marginally preferred by virture of a lower RMSE.
 
 ```{r q5c}
 rmse_ar9 <- sqrt(mean(fc_ar9$Error^2))
@@ -210,21 +250,32 @@ tibble(Model = c("AR(9)", "AR(9)-GARCH(1,1)"),
 ```
 ### (d)
 
+* Both models produce similar point forecasts.
+
+* However, their uncertainty assessments (as proxied by forecast intervals) differ. The AR model produces intervals which widen gradually with horizon due to accumulating error preidctions (based on the homoskedasticity assumption) whereas the AR-GARCH model's intervals are wider as a reaction to the elevated volatility observed in the final part of the sample. 
+
+
 ```{r q5d}
-pdat <- bind_rows(tail(data_est,20)%>%transmute(date, y=returns, type="Actual"),
-                  fc_ar9%>%mutate(date=data_fcst$date)%>%transmute(date, y=Forecast, type="AR(9)"),
-                  fc_garch%>%mutate(date=data_fcst$date)%>%transmute(date, y=Forecast, type="AR(9)-GARCH(1,1)"))
+pdat <- bind_rows(
+  tail(data_est,20) %>% transmute(date, y = returns, type = "Actual"),
+  data_fcst %>% transmute(date, y = returns, type = "Actual"),
+  fc_ar9 %>% mutate(date = data_fcst$date) %>% transmute(date, y = Forecast, type = "AR(9)"),
+  fc_garch %>% mutate(date = data_fcst$date) %>% transmute(date, y = Forecast, type = "AR(9)-GARCH(1,1)")
+)
+
 ggplot()+
-  geom_line(data=pdat, aes(date,y,color=type))+
-  geom_ribbon(data=fc_ar9%>%mutate(date=data_fcst$date), aes(date,ymin=Lo95,ymax=Hi95), alpha=.15, fill="blue")+
-  geom_ribbon(data=fc_garch%>%mutate(date=data_fcst$date), aes(date,ymin=Lo95,ymax=Hi95), alpha=.15, fill="red")+
-  labs(title="Last 4 weeks (actual) + 10-step forecasts", x="Date", y="Returns")
+  geom_line(data = pdat, aes(date, y, color = type))+
+  geom_ribbon(data = fc_ar9 %>% mutate(date = data_fcst$date), aes(date, ymin = Lo95, ymax = Hi95), alpha = .15, fill = "blue")+
+  geom_ribbon(data = fc_garch %>% mutate(date = data_fcst$date), aes(date, ymin = Lo95, ymax = Hi95), alpha = .15, fill = "red")+
+  labs(title = "Last 4 weeks (actual) + 10-step forecasts", x = "Date", y = "Returns")
+
+
 ```
 
 ### (e)
 
 ```{r q5e}
-boot <- ugarchboot(fit_garch, method = "partial", n.ahead = 10, n.bootpred = 5000)
+boot <- ugarchboot(ar_garch_model, method = "partial", n.ahead = 10, n.bootpred = 5000)
 
 boot_pi <- tibble(
   H = 1:10,
@@ -251,7 +302,7 @@ comp <- tibble(
 )
 
 # (2) Residual normality diagnostics to explain differences (Q4d link)
-e <- as.numeric(residuals(fit_garch, standardize = TRUE)); m <- mean(e); s <- sd(e)
+e <- as.numeric(residuals(ar_garch_model, standardize = TRUE)); m <- mean(e); s <- sd(e)
 skew <- mean((e - m)^3) / s^3; kurt <- mean((e - m)^4) / s^4
 JB <- length(e) * (skew^2/6 + (kurt - 3)^2/24); JB_p <- 1 - pchisq(JB, df = 2)
 tails <- tibble(

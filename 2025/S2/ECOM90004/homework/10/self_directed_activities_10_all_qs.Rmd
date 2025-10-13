@@ -123,6 +123,7 @@ AR3GARCH11 <- ugarchfit(
     mean.model     = list(armaOrder  = c(3, 0))
   )
 )
+
 show(AR3GARCH11)
 
 # Extract and print the "Weighted ARCH LM Tests" block from the summary
