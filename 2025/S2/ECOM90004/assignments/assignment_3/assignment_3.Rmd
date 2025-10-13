@@ -77,7 +77,7 @@ The `model_dow` object below create a dummy variable for each day of the week, w
 
 * The F-test's p-value is very large (0.8027), and therefore we cannot reject the null hypothesis that all weekday coefficients are jointly equal to zero.
 
-* All of the inidividual coefficients are statistically insignificant at any reasonable significance level.
+* All of the inidividual coefficient p-values are very large, meaning their null hypothesises of being equal to zero cannot be rejected at any reasonable significance level.
 
 ```{r q2}
 data_est <- data_est %>% 
@@ -274,6 +274,10 @@ ggplot()+
 
 ### (e)
 
+For this series and forecast origin, the boostrap intervals (produced by resampling from the fitted AR(9)-GARC(1,1) model) deliver tighter and slightly asymmetric uncertainty bands near zero relative to the wider and symmetric asmpytotic intervals which increase modestly with horizon.
+
+[NEEDS TO BE UPDATED]
+
 ```{r q5e}
 boot <- ugarchboot(ar_garch_model, method = "partial", n.ahead = 10, n.bootpred = 5000)
 
@@ -287,21 +291,25 @@ boot_pi <- tibble(
 
 ### (f)
 
+In question 4(d) the standardised residuals were found to be negatively skewed and leptokurtic. Therefore, we should expect the bootstrap prediction intervals to deviate from the symmetric Gaussian bands used in part (b).
+
+The additional residual statistics defined below confirm this:skewness = −0.29, kurtosis = 7.26, and the lower 2.5% quantile (q_emp_2.5) = −2.13 vs −1.96 under Normality (q_norm_2.5). These indicate a heavier left tail and more mass near zero, which explain why the bootstrap intervals are both tigher overall and slightly asymmetric on the lower side.
+
+[NEEDS TO BE UPDATED]
+
+
 ```{r q5f}
 
-# (1) Compare analytic vs bootstrap intervals
+# Comparing prediction intervals
 anal_w <- fc_garch$Hi95 - fc_garch$Lo95
 boot_w <- boot_pi$Hi95 - boot_pi$Lo95
 comp <- tibble(
   H = 1:10,
   Analytic_Width = anal_w,
-  Bootstrap_Width = boot_w,
-  Width_Ratio = boot_w / anal_w,
-  Analytic_Asym = (fc_garch$Hi95 - fc_garch$Forecast) - (fc_garch$Forecast - fc_garch$Lo95),
-  Boot_Asym = (boot_pi$Hi95 - boot_pi$Median) - (boot_pi$Median - boot_pi$Lo95)
-)
+  Bootstrap_Width = boot_w
+) %>% print()
 
-# (2) Residual normality diagnostics to explain differences (Q4d link)
+# Additional statistics
 e <- as.numeric(residuals(ar_garch_model, standardize = TRUE)); m <- mean(e); s <- sd(e)
 skew <- mean((e - m)^3) / s^3; kurt <- mean((e - m)^4) / s^4
 JB <- length(e) * (skew^2/6 + (kurt - 3)^2/24); JB_p <- 1 - pchisq(JB, df = 2)

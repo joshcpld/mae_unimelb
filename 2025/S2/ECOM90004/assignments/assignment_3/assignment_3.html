@@ -11,7 +11,7 @@
 
 <meta name="author" content="Josh Copeland (SID: 1444772)" />
 
-<meta name="date" content="2025-10-13" />
+<meta name="date" content="2025-10-14" />
 
 <title>ECOM90004 Assignment 3</title>
 
@@ -352,7 +352,7 @@ display: none;
 
 <h1 class="title toc-ignore">ECOM90004 Assignment 3</h1>
 <h4 class="author">Josh Copeland (SID: 1444772)</h4>
-<h4 class="date">2025-10-13</h4>
+<h4 class="date">2025-10-14</h4>
 
 </div>
 
@@ -417,8 +417,9 @@ the intercept (Friday). It shows there is no “day of the week” or
 <li><p>The F-test’s p-value is very large (0.8027), and therefore we
 cannot reject the null hypothesis that all weekday coefficients are
 jointly equal to zero.</p></li>
-<li><p>All of the inidividual coefficients are statistically
-insignificant at any reasonable significance level.</p></li>
+<li><p>All of the inidividual coefficient p-values are very large,
+meaning their null hypothesises of being equal to zero cannot be
+rejected at any reasonable significance level.</p></li>
 </ul>
 <pre class="r"><code>data_est &lt;- data_est %&gt;% 
   mutate(weekday = wday(date, label = TRUE, abbr = TRUE))
@@ -683,6 +684,11 @@ ggplot()+
 </div>
 <div id="e" class="section level3">
 <h3>(e)</h3>
+<p>For this series and forecast origin, the boostrap intervals (produced
+by resampling from the fitted AR(9)-GARC(1,1) model) deliver tighter and
+slightly asymmetric uncertainty bands near zero relative to the wider
+and symmetric asmpytotic intervals which increase modestly with
+horizon.</p>
 <pre class="r"><code>boot &lt;- ugarchboot(ar_garch_model, method = &quot;partial&quot;, n.ahead = 10, n.bootpred = 5000)
 
 boot_pi &lt;- tibble(
@@ -707,19 +713,38 @@ boot_pi &lt;- tibble(
 </div>
 <div id="f" class="section level3">
 <h3>(f)</h3>
-<pre class="r"><code># (1) Compare analytic vs bootstrap intervals
+<p>In question 4(d) the standardised residuals were found to be
+negatively skewed and leptokurtic. Therefore, we should expect the
+bootstrap prediction intervals to deviate from the symmetric Gaussian
+bands used in part (b).</p>
+<p>The additional residual statistics defined below confirm
+this:skewness = −0.29, kurtosis = 7.26, and the lower 2.5% quantile
+(q_emp_2.5) = −2.13 vs −1.96 under Normality (q_norm_2.5). These
+indicate a heavier left tail and more mass near zero, which explain why
+the bootstrap intervals are both tigher overall and slightly asymmetric
+on the lower side.</p>
+<pre class="r"><code># Comparing prediction intervals
 anal_w &lt;- fc_garch$Hi95 - fc_garch$Lo95
 boot_w &lt;- boot_pi$Hi95 - boot_pi$Lo95
 comp &lt;- tibble(
   H = 1:10,
   Analytic_Width = anal_w,
-  Bootstrap_Width = boot_w,
-  Width_Ratio = boot_w / anal_w,
-  Analytic_Asym = (fc_garch$Hi95 - fc_garch$Forecast) - (fc_garch$Forecast - fc_garch$Lo95),
-  Boot_Asym = (boot_pi$Hi95 - boot_pi$Median) - (boot_pi$Median - boot_pi$Lo95)
-)
-
-# (2) Residual normality diagnostics to explain differences (Q4d link)
+  Bootstrap_Width = boot_w
+) %&gt;% print()</code></pre>
+<pre><code>## # A tibble: 10 × 3
+##        H Analytic_Width Bootstrap_Width
+##    &lt;int&gt;          &lt;dbl&gt;           &lt;dbl&gt;
+##  1     1         0.0657         0.00309
+##  2     2         0.0662         0.00309
+##  3     3         0.0667         0.00309
+##  4     4         0.0671         0.00309
+##  5     5         0.0675         0.00309
+##  6     6         0.0679         0.00309
+##  7     7         0.0683         0.00309
+##  8     8         0.0687         0.00309
+##  9     9         0.0690         0.00309
+## 10    10         0.0693         0.00309</code></pre>
+<pre class="r"><code># Additional statistics
 e &lt;- as.numeric(residuals(ar_garch_model, standardize = TRUE)); m &lt;- mean(e); s &lt;- sd(e)
 skew &lt;- mean((e - m)^3) / s^3; kurt &lt;- mean((e - m)^4) / s^4
 JB &lt;- length(e) * (skew^2/6 + (kurt - 3)^2/24); JB_p &lt;- 1 - pchisq(JB, df = 2)
