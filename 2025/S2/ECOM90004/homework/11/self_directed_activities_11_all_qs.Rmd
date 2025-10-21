@@ -1,0 +1,155 @@
+---
+title: "`r fname <- gsub('_', ' ', tools::file_path_sans_ext(basename(knitr::current_input()))); paste0(toupper(substr(fname, 1, 1)), substr(fname, 2, nchar(fname)))`"
+author: "Josh Copeland (SID: 1444772)"
+output: html_document
+date: "`r Sys.Date()`"
+---
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+library(lubridate)
+library(janitor)
+library(forecast)
+library(rugarch)
+library(vars)
+
+theme_set(theme_minimal())
+
+```
+
+```{r setup_comment, include=TRUE}
+
+# Packages used:
+
+# library(tidyverse)
+# library(lubridate)
+# library(janitor)
+# library(forecast)
+# library(vars)
+
+```
+
+```{r setup_data}
+
+dt <- read.csv("TGY.csv")
+GDP <- ts(dt$GDP, start=c(1960,1), end=c(2024,2), frequency=4)
+Tax <- ts(dt$Tax, start=c(1960,1), end=c(2024,2), frequency=4)
+Govt <- ts(dt$Govt, start=c(1960,1), end=c(2024,2), frequency=4)
+
+GDP <- window(GDP, start=c(1980,1), end=c(2019,4))
+Tax <- window(Tax, start=c(1980,1), end=c(2019,4))
+Govt <- window(Govt, start=c(1980,1), end=c(2019,4))
+
+DGDP <- diff(GDP)*100  # pct growth per qtr
+DTax <- diff(Tax)*100
+DGovt <- diff(Govt)*100
+
+```
+
+# Q1
+
+Replicate the VAR model selection exercise in Lecture 11 for the trivariate model including Tax, Govt and GDP.
+
+```{r q1}
+
+# Set up data frame with the variables to include in the VAR
+DY <- data.frame(DTax=DTax, DGovt=DGovt, DGDP=DGDP)
+
+# VAR() command can estimate with fixed lag length,
+# or search over lag lengths like this:
+VARp <- VAR(DY, lag.max=8, ic="AIC")
+
+# Residual autocorrelation test:
+print(serial.test(VARp, lags.pt=12)$serial)
+
+```
+
+# Q2
+
+Replicate the impulse response analysis in which a +1 unit impulse to DGDP is specified and responses to all three of DTax, DGovt and DGDP are calculated from the model.
+
+```{r q2}
+
+# Compute the Impulse Reponses using VAR_TGY:
+IRF <- irf(VARp, 
+    impulse="DGDP",                     # impulse to DGDP only
+    ortho=FALSE,                        # 1 unit impulse
+    response=c("DTax","DGovt", "DGDP"), # responses by all vars 
+    n.ahead=8)
+
+print(IRF$irf)
+
+print(IRF$Lower)
+print(IRF$Upper)
+
+plot(IRF)
+
+```
+
+
+# Q3
+
+Obtain the estimated conditional covariance matrix for the VAR in question 1, and calculate its Choleski factorisation.
+
+```{r q3}
+
+Sigma <- summary(VARp)$covres
+C <- chol(Sigma)
+
+```
+
+
+# Q4
+
+Use the Choleski orthogonalisation approach to compute the impulse to DGDP implied by this model, and compute the impulse responses for all three variables. Compare to those in question 2.
+
+
+```{r q4}
+
+IRF <- irf(VARp, 
+    impulse="DGDP",                     # impulse to DGDP only
+    ortho=TRUE,                     ##### switched to TRUE
+    response=c("DTax","DGovt", "DGDP"), # responses by all vars 
+    n.ahead=8)
+
+plot(IRF)
+
+
+```
+
+
+# Q5
+
+Use the Choleski orthogonalisation approach to compute the impulse to DGovt implied by this model, and compute the impulse responses for all three variables.
+
+```{r q5}
+
+IRF <- irf(VARp, 
+    impulse="DGovt",                     # impulse to DGDP only
+    ortho=TRUE,                     ##### switched to TRUE
+    response=c("DTax","DGovt", "DGDP"), # responses by all vars 
+    n.ahead=8)
+
+plot(IRF)
+
+```
+
+
+# Q6
+
+Use the Choleski orthogonalisation approach to compute the impulse to DTax implied by this model, and compute the impulse responses for all three variables.
+
+
+```{r q6}
+
+IRF <- irf(VARp, 
+    impulse="DTax",                     # impulse to DGDP only
+    ortho=TRUE,                     ##### switched to TRUE
+    response=c("DTax","DGovt", "DGDP"), # responses by all vars 
+    n.ahead=8)
+
+plot(IRF)
+
+
+```
