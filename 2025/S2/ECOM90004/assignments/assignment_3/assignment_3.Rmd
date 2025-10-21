@@ -303,7 +303,7 @@ The additional residual statistics defined below confirm this:
 
 * The empirical lower 2.5% quantile (-2.13) is more extreme than the normal benchmark (-1.96), while the upper 97.5% quantile (1.85) is slightly lower than the normal benchmark (1.96). This indicated a heavier left tail and morem ass near zero consistent with negative skewness and high kurtosis.
 
-* These explain the observed differences in interval shape and width. The normal intervals from part (b) are wide and symmetric (approximately 0.066 - 0.069) while the boostrap intervals are tighter (consistent 0.003 width). The narrower, stable boostrap intervals reflect the fact taht most resampled residuals fall close to zero thanks to the very large peaking of the ermpirical distribution (much greater than under normality).
+* These explain the observed differences in interval shape and width. The normal intervals from part (b) are wide and symmetric (approximately 0.066 - 0.069) while the boostrap intervals are tighter (consistent 0.003 width). The narrower, stable boostrap intervals reflect the fact taht most resampled residuals fall close to zero thanks to the very large peaking of the empirical distribution (much greater than under normality).
 
 * skewness = −0.29, kurtosis = 7.26, and the lower 2.5% quantile (q_emp_2.5) = −2.13 vs −1.96 under Normality (q_norm_2.5). These indicate a heavier left tail and more mass near zero, which explain why the bootstrap intervals are both tighter overall and slightly asymmetric on the lower side.
 
